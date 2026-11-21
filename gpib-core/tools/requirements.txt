@@ -1,0 +1,4 @@
+pyvisa
+pyvisa-py
+python-vxi11
+standard-xdrlib  # python-vxi11 needs xdrlib, removed in Python 3.13

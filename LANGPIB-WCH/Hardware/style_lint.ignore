@@ -1,0 +1,58 @@
+# style_lint.py exceptions for LANGPIB-WCH (2026-11-04: HR911105A, 4 layers). Fixes go into route_pre.py; these are the reasoned leftovers.
+off_center_entry C11.1                  # entry set by the neighbouring lane or pin (0.4 pitch)
+off_center_entry C16.1                  # entry set by the neighbouring lane or pin (0.4 pitch)
+off_axis_entry J1.A12                 # entry set by the neighbouring lane or pin row (J1, U1 corner)
+off_axis_entry J1.B1                  # entry set by the neighbouring lane or pin row (J1, U1 corner)
+off_axis_entry U1.33                  # entry set by the neighbouring lane or pin row (J1, U1 corner)
+angled_entry C9.1                   # short diagonal into a small pad, set by the neighbouring pads
+angled_entry C7.1                   # short diagonal into a small pad, set by the neighbouring pads
+angled_entry R1.1                   # short diagonal into a small pad, set by the neighbouring pads
+angled_entry R1.2                   # short diagonal into a small pad, set by the neighbouring pads
+angled_entry C1.1                   # short diagonal into a small pad, set by the neighbouring pads
+angled_entry C11.1                  # short diagonal into a small pad, set by the neighbouring pads
+angled_entry C11.2                  # short diagonal into a small pad, set by the neighbouring pads
+angled_entry C16.1                  # short diagonal into a small pad, set by the neighbouring pads
+angled_entry R2.1                   # short diagonal into a small pad, set by the neighbouring pads
+angled_entry C8.1                   # short diagonal into a small pad, set by the neighbouring pads
+teardrop_run J3.5                   # lane bends within a THT pad length: the J3 fan sets it
+teardrop_run J3.6                   # lane bends within a THT pad length: the J3 fan sets it
+narrow_pin_trace U1                     # 0.4-pitch fans (0.35 rows, via staircase): 0.25 fails DRC (net_width.py trial, 14 clearance items)
+off_grid C18                    # in line with Y1's pad columns (rule 10 over 11e)
+off_grid C17                    # in line with Y1's pad columns (rule 10 over 11e)
+via_stub C8.2                   # per-pad GND via beside the pad (gnd_stitch.py)
+pair_gap /ATN//IFC              # fans and bundles change pitch at the bends (J3 fan, LED / UART / USB turns)
+pair_gap /ATN//SRQ              # fans and bundles change pitch at the bends (J3 fan, LED / UART / USB turns)
+pair_gap /DAV//EOI              # fans and bundles change pitch at the bends (J3 fan, LED / UART / USB turns)
+pair_gap /DAV//NDAC             # fans and bundles change pitch at the bends (J3 fan, LED / UART / USB turns)
+pair_gap /DAV//NRFD             # fans and bundles change pitch at the bends (J3 fan, LED / UART / USB turns)
+pair_gap /DAV//REN              # fans and bundles change pitch at the bends (J3 fan, LED / UART / USB turns)
+pair_gap /DIO1//DIO6            # fans and bundles change pitch at the bends (J3 fan, LED / UART / USB turns)
+pair_gap /DIO2//DIO6            # fans and bundles change pitch at the bends (J3 fan, LED / UART / USB turns)
+pair_gap /DIO2//DIO7            # fans and bundles change pitch at the bends (J3 fan, LED / UART / USB turns)
+pair_gap /DIO3//DIO7            # fans and bundles change pitch at the bends (J3 fan, LED / UART / USB turns)
+pair_gap /DIO3//DIO8            # fans and bundles change pitch at the bends (J3 fan, LED / UART / USB turns)
+pair_gap /DIO4//DIO8            # fans and bundles change pitch at the bends (J3 fan, LED / UART / USB turns)
+pair_gap /EOI//NRFD             # fans and bundles change pitch at the bends (J3 fan, LED / UART / USB turns)
+pair_gap /EOI//REN              # fans and bundles change pitch at the bends (J3 fan, LED / UART / USB turns)
+pair_gap /ETH_LED0//ETH_LED1    # fans and bundles change pitch at the bends (J3 fan, LED / UART / USB turns)
+pair_gap /IFC//NDAC             # fans and bundles change pitch at the bends (J3 fan, LED / UART / USB turns)
+pair_gap /IFC//NRFD             # fans and bundles change pitch at the bends (J3 fan, LED / UART / USB turns)
+pair_gap /IFC//SRQ              # fans and bundles change pitch at the bends (J3 fan, LED / UART / USB turns)
+pair_gap /MDI_RN//MDI_RP        # fans and bundles change pitch at the bends (J3 fan, LED / UART / USB turns)
+pair_gap /MDI_TN//MDI_TP        # fans and bundles change pitch at the bends (J3 fan, LED / UART / USB turns)
+pair_gap /NDAC//NRFD            # fans and bundles change pitch at the bends (J3 fan, LED / UART / USB turns)
+pair_gap /NDAC//SRQ             # fans and bundles change pitch at the bends (J3 fan, LED / UART / USB turns)
+pair_gap /UART_RX//UART_TX      # fans and bundles change pitch at the bends (J3 fan, LED / UART / USB turns)
+pair_gap /USB_DM//USB_DP        # fans and bundles change pitch at the bends (J3 fan, LED / UART / USB turns)
+off_grid C19                    # level with J2.5 (its CT pin): straight run through the pin 6 / 4 gap
+via_stub C9.1                   # +3V3 plane via past the cap: the in-line spot is the cap's GND pad
+via_stub C12.1                  # +3V3 plane via past the cap: the in-line spot is the cap's GND pad
+pair_gap Net-(J2-Pad12)/Net-(J2-Pad9)   # LED runs part at the turn down beside J2's pins
+off_grid C6                     # +3V3 pad in line with C4 / C5's (0402 beside 0805s, group_align)
+pair_gap /LED_N//UART_TX        # fans and bundles change pitch at the bends (J3 fan, LED / UART / USB turns)
+pair_gap /SWIO//USB_DM          # fans and bundles change pitch at the bends (J3 fan, LED / UART / USB turns)
+pair_gap /ETH_LED1//LED_N      # fans and bundles change pitch at the bends (J3 fan, LED / UART / USB turns)
+pair_gap /MDI_RP//MDI_TN        # the two MDI pairs part where the channel turns east (pair-to-pair, not within a pair)
+gnd_via_reason 114.956,116.475  # under-U1 stitching via (user: GND fill under the body), 1.5 mm pass beside the DIO staircase
+via_stub C11.2                  # per-pad GND via beside the pad (gnd_stitch.py)
+via_stub Y1.4                   # per-pad GND via beside the pad (gnd_stitch.py)

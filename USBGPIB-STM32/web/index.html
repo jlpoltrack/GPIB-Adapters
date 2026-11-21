@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>USB GPIB Adapter</title>
+    <meta name="description" content="Configure the USBGPIB-STM32 adapter and talk to GPIB instruments from the browser (Web Serial)." />
+  </head>
+  <body>
+    <header>
+      <div>
+        <h1>USB GPIB Adapter</h1>
+        <p class="sub" id="version">Not connected</p>
+      </div>
+      <button id="connect" class="primary">Connect</button>
+    </header>
+
+    <p id="unsupported" class="banner" hidden>
+      This page needs Web Serial: use Chrome or Edge on a desktop computer.
+    </p>
+
+    <main>
+      <section class="card" id="settings-card">
+        <h2>Serial port settings</h2>
+        <form id="settings">
+          <label>Instrument address <input name="addr" placeholder="5 or 9 96" autocomplete="off" /></label>
+          <label>Read timeout (ms) <input name="read_tmo_ms" type="number" min="1" max="3000" /></label>
+          <label>Terminator added to writes
+            <select name="eos">
+              <option value="0">CR LF</option><option value="1">CR</option>
+              <option value="2">LF</option><option value="3">None</option>
+            </select>
+          </label>
+          <label class="check"><input type="checkbox" name="eoi" /> EOI with the last byte</label>
+          <label class="check"><input type="checkbox" name="auto" /> Read after every write</label>
+          <label class="check"><input type="checkbox" name="eot_enable" /> Mark EOI in reads with character</label>
+          <label>EOI character (decimal) <input name="eot_char" type="number" min="0" max="255" /></label>
+          <label class="check"><input type="checkbox" name="savecfg" /> Save settings in the adapter</label>
+        </form>
+        <h2>USBTMC side</h2>
+        <form id="adapter">
+          <label>Identify instrument at start-up
+            <select name="autoid">
+              <option value="on">On</option><option value="slow">On, wait 5 s</option>
+              <option value="slower">On, wait 15 s</option><option value="slowest">On, wait 30 s</option>
+              <option value="off">Off (address only)</option>
+            </select>
+          </label>
+          <label>USB serial string
+            <select name="idstring"><option value="normal">Full</option><option value="short">Short (20 characters)</option></select>
+          </label>
+          <p class="hint">Takes effect when the adapter next starts.</p>
+        </form>
+      </section>
+
+      <section class="card" id="bus-card">
+        <div class="row">
+          <h2>Instruments</h2>
+          <button id="scan">Scan bus</button>
+        </div>
+        <table id="instruments">
+          <thead><tr><th>Address</th><th>Identity</th><th></th></tr></thead>
+          <tbody><tr><td colspan="3" class="hint">Scan to list the instruments on the bus.</td></tr></tbody>
+        </table>
+        <div class="row status">
+          <span>SRQ <b id="srq">–</b></span>
+          <span>Last error <b id="err">–</b></span>
+          <button id="refresh" class="small">Refresh</button>
+        </div>
+      </section>
+
+      <section class="card" id="capture-card">
+        <h2>Plotter capture</h2>
+        <p class="hint">Listen-only: set the instrument to talk-only (plotter or printer output), start, then press
+          its plot or print button. The adapter takes no part in the bus while capturing.</p>
+        <div class="row">
+          <input id="capture-name" value="capture.plt" aria-label="File name" />
+          <button id="capture-start" class="primary">Start</button>
+          <button id="capture-stop">Stop</button>
+        </div>
+        <div class="row status">
+          <span>Captured <b id="capture-count">0</b> bytes</span>
+          <button id="capture-save" class="small" disabled>Save file</button>
+        </div>
+      </section>
+
+      <section class="card" id="fw-card">
+        <h2>Firmware update</h2>
+        <label class="check"><input type="radio" name="fw-src" value="latest" id="fw-latest" disabled /> <span>Latest build
+          <span class="hint" id="fw-info">(not available here)</span></span></label>
+        <label class="check"><input type="radio" name="fw-src" value="file" id="fw-file-radio" checked />
+          <input type="file" id="fw-file" accept=".bin" /></label>
+        <div class="row fw-steps">
+          <button id="fw-detach">1. Restart into updater</button>
+          <button id="fw-flash" class="primary">2. Flash</button>
+        </div>
+        <progress id="fw-progress" max="1" value="0"></progress>
+        <p class="hint" id="fw-status">Step 1 is not needed if the adapter is already in the updater (button held while
+          plugging in). Linux needs a udev rule for 1209:db42.</p>
+      </section>
+
+      <section class="card wide" id="term-card">
+        <div class="row">
+          <h2>Terminal</h2>
+          <button id="clear" class="small">Clear</button>
+        </div>
+        <pre id="log" aria-live="polite"></pre>
+        <form id="term" class="row">
+          <input id="line" placeholder="*IDN?  or  ++command" autocomplete="off" spellcheck="false" />
+          <button type="submit" name="send">Send</button>
+          <button type="button" id="ask" class="primary">Query</button>
+          <button type="button" id="read">Read</button>
+        </form>
+        <p class="hint">Send writes to the instrument (lines starting with ++ go to the adapter). Query sends and reads
+          the answer up to EOI. Read reads whatever the instrument has.</p>
+      </section>
+    </main>
+
+    <footer>
+      <a href="https://github.com/jlpoltrack/GPIB-Adapters/tree/main/USBGPIB-STM32">USBGPIB-STM32 on GitHub</a>
+    </footer>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

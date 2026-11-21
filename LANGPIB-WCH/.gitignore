@@ -1,0 +1,31 @@
+# KiCad backups, caches, and per-user state
+*-backups/
+*.kicad_prl
+*.lck
+*-bak
+*~
+_autosave-*
+fp-info-cache
+routing-variants/
+
+# macOS
+.DS_Store
+
+# Enclosure: cad-tools regenerates these; only the 3MF, STEP and overview are kept
+Enclosure/*.stl
+Enclosure/fit-test/
+Enclosure/renders/*
+!Enclosure/renders/overview.png
+__pycache__/
+docs/datasheets/
+
+# Review renders (look, do not commit)
+Hardware/Render-Copper.png
+Hardware/Render-Refs-*.png
+Hardware/renders/
+
+# Firmware build output
+Firmware/build/
+Firmware/build-sim/
+Firmware/bootloader/build/
+Firmware/compile_flags.txt

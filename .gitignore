@@ -1,0 +1,5 @@
+.DS_Store
+.claude/
+
+# vendor documents: local copies only, never published
+USBGPIB-STM32/docs/rm0008-*.pdf

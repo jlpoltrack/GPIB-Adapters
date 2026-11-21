@@ -1,0 +1,24 @@
+# KiCad backups, caches, and per-user state
+*-backups/
+*.kicad_prl
+*.lck
+*-bak
+*~
+_autosave-*
+fp-info-cache
+
+# macOS
+.DS_Store
+
+# local routing rounds
+routing-variants/
+
+# Python tools (pip install -r tools/requirements.txt)
+.venv/
+__pycache__/
+
+# Enclosure: cad-tools regenerates these; only the 3MF, STEP and overview are kept
+Enclosure/*.stl
+Enclosure/fit-test/
+Enclosure/renders/*
+!Enclosure/renders/overview.png

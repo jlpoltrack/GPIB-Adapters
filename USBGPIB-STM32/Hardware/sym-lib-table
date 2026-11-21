@@ -1,0 +1,4 @@
+(sym_lib_table
+	(version 7)
+	(lib (name "Centronics") (type "KiCad") (uri "${KIPRJMOD}/KiCADv6/2026-10-20_14-10-57.kicad_sym") (options "") (descr "NRC 112-024-113R001 GPIB receptacle"))
+)

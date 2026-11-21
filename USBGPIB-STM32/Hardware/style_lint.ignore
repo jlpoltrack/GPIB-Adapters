@@ -1,0 +1,3 @@
+via_in_pad Y1.4   # GND pad inside the OSC_IN loop; large pad, JLC fills
+via_in_pad Y1.2   # crystal case GND straight to the bottom pour
+off_grid J2  # outline datum: pcb_outline.py builds the 2.25" board around J2's pins; moving it moves the board

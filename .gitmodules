@@ -1,0 +1,19 @@
+[submodule "LANGPIB-WCH/Firmware/lib/tinyusb"]
+	path = LANGPIB-WCH/Firmware/lib/tinyusb
+	url = https://github.com/hathach/tinyusb.git
+[submodule "LANGPIB-WCH/Firmware/lib/lwip"]
+	path = LANGPIB-WCH/Firmware/lib/lwip
+	url = https://github.com/lwip-tcpip/lwip.git
+[submodule "USBGPIB-STM32/Firmware/lib/tinyusb"]
+	path = USBGPIB-STM32/Firmware/lib/tinyusb
+	url = https://github.com/hathach/tinyusb.git
+[submodule "USBGPIB-STM32/Firmware/lib/cmsis_device_f1"]
+	path = USBGPIB-STM32/Firmware/lib/cmsis_device_f1
+	url = https://github.com/STMicroelectronics/cmsis_device_f1.git
+[submodule "USBGPIB-STM32/Firmware/lib/CMSIS_6"]
+	path = USBGPIB-STM32/Firmware/lib/CMSIS_6
+	url = https://github.com/ARM-software/CMSIS_6.git
+[submodule "USBGPIB-STM32/bootloader/dapboot"]
+	path = USBGPIB-STM32/bootloader/dapboot
+	url = https://github.com/devanlai/dapboot.git
+	ignore = dirty

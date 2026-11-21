@@ -1,0 +1,62 @@
+name: Firmware + web app (GitHub Pages)
+
+on:
+  push:
+    branches: [main]
+    paths: ['USBGPIB-STM32/web/**', 'USBGPIB-STM32/Firmware/**', 'USBGPIB-STM32/bootloader/**', 'gpib-core/**', '.gitmodules', '.github/workflows/pages.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Firmware
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi
+          make -C USBGPIB-STM32/Firmware
+          make -C USBGPIB-STM32/Firmware bootloader
+          make -C USBGPIB-STM32/Firmware test HOSTCC=gcc
+          mkdir -p USBGPIB-STM32/web/public/firmware
+          cp USBGPIB-STM32/Firmware/build/usbgpib.bin USBGPIB-STM32/web/public/firmware/
+          printf '{"commit":"%s","date":"%s"}\n' "$GITHUB_SHA" "$(date -u +%Y-%m-%d)" > USBGPIB-STM32/web/public/firmware/info.json
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: USBGPIB-STM32/web/package-lock.json
+      - name: Web app
+        working-directory: USBGPIB-STM32/web
+        run: |
+          npm ci
+          npm test
+          npm run build
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: USBGPIB-STM32/web/dist
+
+  deploy: # off until Pages is enabled: set the repo variable PAGES_ENABLED to true
+    needs: build
+    if: vars.PAGES_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5
