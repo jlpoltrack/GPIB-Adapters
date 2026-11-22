@@ -1,5 +1,18 @@
 .DS_Store
 .claude/
+build/
+out/
+.venv/
+__pycache__/
+
+# KiCad backups, caches, and per-user state
+*-backups/
+*.kicad_prl
+*.lck
+*-bak
+*~
+_autosave-*
+fp-info-cache
 
 # vendor documents: local copies only, never published
 USBGPIB-STM32/docs/rm0008-*.pdf
