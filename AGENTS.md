@@ -52,3 +52,10 @@ Flashing, bring-up and production targets: `USBGPIB-STM32/README.md`, `LANGPIB-W
 Learning loop: before reporting done, record what this session taught here (or in the board's `docs/`), each lesson
 with its scope and reason; delete lessons whose reason no longer holds. Board and enclosure lessons go into
 Tools-KiCad / Tools-CAD under their own learning loops.
+
+- **USBGPIB-STM32: SW1 enters DFU only when held at reset, and only dapboot reads it; the app must not poll it.**
+  Reason: owner request (2026-11-22); a press while running used to drop the adapter into dapboot. USB entry
+  (DFU_DETACH, `++dfu`, `!reset`) stays in the app.
+- **USBGPIB-STM32: change dapboot (its source or `BOOT_DEFS`) only when needed.** Reason: any change to `dapboot.bin`
+  makes every board rewrite its bootloader pages on the next app update, and a power loss then needs SWD
+  (`docs/firmware.md`).

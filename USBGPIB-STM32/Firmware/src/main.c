@@ -22,11 +22,11 @@ void tud_dfu_runtime_reboot_to_dfu_cb(void)
 	s_dfu_detach = true;
 }
 
-/* the button, or a DFU_DETACH: into dapboot */
+/* a DFU_DETACH: into dapboot. SW1 is not read here: only dapboot samples it, at reset (hold it while plugging in) */
 static void check_bootloader_entry(void)
 {
 	board_watchdog_feed();
-	if (BTN_PRESSED || (s_dfu_detach && ((int32_t)(board_millis() - s_dfu_detach_at) >= 0)))
+	if (s_dfu_detach && ((int32_t)(board_millis() - s_dfu_detach_at) >= 0))
 		board_enter_bootloader();
 }
 

@@ -18,7 +18,7 @@ The firmware uses the pid.codes test ID 1209:0001, which must be replaced before
 - Composite USB device: USBTMC/USB488, a serial port speaking the Prologix `++` protocol, and DFU.
 - GPIB lines driven directly from the MCU's 5 V-tolerant pins in open-drain mode, no bus drivers: fine for about 5 instruments on the bus.
 - USB-C with 5K1 CC pull-downs, SRV05-4 ESD protection, XC6206 3.3 V LDO.
-- DFU bootloader (dapboot) entered with SW1; SWD and UART headers.
+- DFU bootloader (dapboot), entered from USB or by holding SW1 while plugging in; SWD and UART headers.
 - Browser app (`web/`, Chrome or Edge): settings, bus scan, terminal, plotter capture and firmware updates.
 
 ## Connectors
@@ -30,7 +30,8 @@ The firmware uses the pid.codes test ID 1209:0001, which must be replaced before
 | J3 | 1×3 header, UART2 | 1 GND, 2 TX (PA2), 3 RX (PA3); 3.3 V only; DNP |
 | J4 | 1×4 header, SWD | V1.1: 1 GND, 2 SWCLK, 3 SWDIO, 4 NRST. V1.0: 1 SWDIO, 2 SWCLK, 3 GND. No power; DNP |
 
-SW1 is the DFU button (PA1 to GND), D2 the status LED (PC13).
+SW1 is the DFU button (PA1 to GND): it only counts when held while plugging in; a press while running does nothing.
+D2 is the status LED (PC13).
 
 ## GPIB pin map
 

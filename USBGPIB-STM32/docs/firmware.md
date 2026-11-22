@@ -67,9 +67,10 @@ Extensions:
 
 ## Entering the bootloader
 
-`dfu-util` (DFU_DETACH), `++dfu`, `!reset`, or SW1 while the app runs: each writes dapboot's magic to BKP->DR1 and
-resets. Holding SW1 while plugging in also stays in dapboot, as does an invalid app, so a bad flash can't brick the
-board. SWD is the recovery path, as the ROM bootloader's USART1 pins are SRQ and ATN.
+From the running app: `dfu-util` (DFU_DETACH), `++dfu` or `!reset`; each writes dapboot's magic to BKP->DR1 and
+resets. SW1 works only at power-up: dapboot samples it once, about 100 ms after reset (its default 1,440,000-pass
+delay loop at 72 MHz), so hold it while plugging in. The app ignores SW1, so a press while running does nothing. An
+invalid app also stays in dapboot, so a bad flash can't brick the board. SWD is the recovery path, as the ROM bootloader's USART1 pins are SRQ and ATN.
 
 The app carries the dapboot it was built with (`src/dapboot_image.c`). At boot it compares that copy with the
 bootloader pages and rewrites them when they differ, so a DFU update of the app also updates dapboot, which DFU
