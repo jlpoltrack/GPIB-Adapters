@@ -5,8 +5,8 @@ Times every USB transfer of the USBTMC path (OUT message, READ_STATUS_BYTE contr
 bulk IN) with the meter's display on (D1) and off (D0), and the same reading over the Prologix serial port.
 "T3 done on bus" is when a second, empty message is accepted: the adapter takes it once the T3 job has ended.
   python tools/latency_3456a.py [--reps 20] [--no-cdc] [--port /dev/cu.usbmodemNNN]
-  python tools/latency_3456a.py --lib ../../../Tools-HP3456A/tools    # readings/s of hp3456lib's read() instead
-Needs pyusb and libusb. Holds ~/.cache/hp3456a.lock, as Tools-HP3456A does. Leaves the meter in D1 T1, local.
+  python tools/latency_3456a.py --lib ../../../Tools-Bench/hp3456a/tools    # readings/s of hp3456lib's read() instead
+Needs pyusb and libusb. Holds ~/.cache/hp3456a.lock, as Tools-Bench's hp3456a tools do. Leaves the meter in D1 T1, local.
 """
 import argparse
 import fcntl
