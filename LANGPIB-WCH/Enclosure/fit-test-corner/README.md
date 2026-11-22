@@ -29,7 +29,7 @@ Bring: the assembled board.
 - [ ] press clicks the switch, tab springs back; force: light / firm / too hard
 - [ ] tab free in its slot (no bridging strings), no crack at the hinge
 
-### Post (18.5, 45.2)
+### Post (20.7, 43.7)
 - [ ] post lands on bare board (0.05 mm gap), no part under it
 - [ ] board held down: no rattle with the lid closed
 
@@ -45,7 +45,7 @@ Bring: the assembled board.
 - Screw boss (52.0, 10.7)
 - USB-C brace
 - RJ45 brace
-- Post (8.0, 20.0)
+- Post (7.8, 19.9)
 
 ## Report back
 
