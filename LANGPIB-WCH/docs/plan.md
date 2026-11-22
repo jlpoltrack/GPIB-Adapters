@@ -1,17 +1,16 @@
 # LANGPIB-WCH: plan
 
-Third LANGPIB variant (after LANGPIB-STM32 and LANGPIB-RP2350): the same
-GPIB plug-on dongle, on the WCH **CH32V407RET6** (LQFP64, RISC-V 200 MHz, 10/100 MAC **and PHY on chip**, USB-HS PHY used
+The LANGPIB GPIB plug-on dongle on the WCH **CH32V407RET6** (LQFP64, RISC-V 200 MHz, 10/100 MAC **and PHY on chip**, USB-HS PHY used
 at full speed). Hardware only for now; firmware later on gpib-core. MCU reference: `../../Reference-WCH` (hardware reference design,
 Ethernet README, bootloader and programmer designs).
 
 ## Requirements (user, 2026-11-03)
 
-- Form as LANGPIB-STM32 / -RP2350: 57.15 x 46.2 mm, plugs onto the instrument's GPIB socket, RJ45 and USB-C side by side on
+- Form: 57.15 x 46.2 mm, plugs onto the instrument's GPIB socket, RJ45 and USB-C side by side on
   the right edge, all parts on top, cad-tools enclosure. ~~2 layers~~ **4 layers** (user, 2026-11-04: still under the
-  order limit; In1 GND, In2 +3V3, as the siblings).
+  order limit; In1 GND, In2 +3V3).
 - ~~Dual RJ45 footprint (SMD default + THT backup), tab up~~: **replaced** (user, 2026-11-04) by the THT **HanRun
-  HR911105A MagJack**, JLC-fitted, at LANGPIB-STM32's spot (tab down): no SMD MagJack is stocked at JLC, and the
+  HR911105A MagJack**, JLC-fitted, tab down: no SMD MagJack is stocked at JLC, and the
   transformer + line-side isolation took about 19 x 18 mm. USB-C and RJ45 stay on the same (right) edge.
 - ~~PoE-ready~~: **dropped** (user, 2026-11-03, after the BOM estimate): PoE-ready cost 10 mm of height and isolation
   spacing for ~$7/board of parts nobody may fit. Board back to 57.15 x 46.2 mm, USB bus-powered only.

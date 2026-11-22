@@ -14,6 +14,7 @@ _Static_assert(INSTR_ID_MAX < SETTINGS_ID_LEN, "settings.id holds the ID string 
 uint8_t gpib_addr = 1;
 
 static char    s_id[INSTR_ID_MAX + 1];
+static bool    s_ready;
 static char    s_term;
 static uint8_t s_idbuf[100];
 
@@ -33,6 +34,11 @@ void instr_set_readterm(char term)
 const char *instr_id(void)
 {
 	return s_id;
+}
+
+bool instr_ready(void)
+{
+	return s_ready;
 }
 
 /* The AVR used its 80-bit signature row here; the STM32 uses its 96-bit unique ID */
@@ -199,6 +205,7 @@ bool instr_startup(void (*idle)(void))
 	/* Matlab does not allow resource strings longer than this */
 	if (settings.idstring_short && (strlen(s_id) > 20))
 		s_id[20] = '\0';
+	s_ready = true;
 	return true;
 }
 

@@ -1,8 +1,6 @@
 # LANGPIB-WCH: firmware
 
-Port of the LANGPIB firmware to the CH32V407RET6. Goals, VXI-11 scope and bus sharing are in LANGPIB-STM32's
-firmware notes and hold here; the structure follows LANGPIB-RP2350's (lwIP,
-`net.c`, polled Ethernet). This file covers what differs. Chip facts: the Reference-WCH repo (`../../Reference-WCH`: RM translation in
+LANGPIB firmware on the CH32V407RET6, on gpib-core: lwIP, `net.c`, polled Ethernet. Chip facts: the Reference-WCH repo (`../../Reference-WCH`: RM translation in
 `docs/rm/`, `ethernet/README.md`, `docs/bootloader-design.md`).
 
 **Status (2026-11-21):** board 1 brought up on the `SIM=1` build, then J3 fitted: the real build runs an HP 3456A and
@@ -13,8 +11,7 @@ USBTMC (PyVISA-py), reads to 254 B and writes to 2000 B through the simulated in
 (`MDI, polarity reversed`), AutoIP, mDNS, both jack LEDs, web page and LXI XML, VXI-11 (`vxi11_check.py`, all
 checks), TCP 5025 and 1234 (`sockets_check.py`); DFU: update over USB with no button (runtime detach), two downloads
 back to back, the app rewriting the bootloader; settings across `++rst` (`++net name`). D1 lights. With J3: real
-instruments on every transport. Not yet run: DHCP from a server (tested direct to a Mac only), SW1 entry into DFU,
-10M link.
+instruments on every transport. DHCP from a home router, SW1 entry into DFU and a 10 Mbit link (2026-11-21).
 Chip: ID 0x46720012, FEATURE_SIGN 0xE33900FF (bit 0 = 1: ACT LED), 576 KB flash, RAM_CODE_MOD 0 (200 KB RAM); UID word 3
 reads 0xE339E339 (erased), so only 64 UID bits are real.
 
@@ -41,14 +38,14 @@ make                    # bootloader first, then build/langpib.elf (0x08004100),
 make flash              # SDI, RP2350-Zero probe (PROBE=/dev/cu.usbmodemXXXX): bootloader + header + app
 make production         # a new board: erase, bootloader + app, boot check, docs/production-log.csv
 make dfu                # USB: dfu-util detaches the app and downloads build/langpib.dfu
-make netdfu HOST=ip PASSWORD=pw   # Ethernet: the same .dfu by HTTP POST (see "Firmware update over Ethernet")
+make netdfu HOST=ip [PASSWORD=pw]  # Ethernet: the same .dfu by HTTP POST (see "Firmware update over Ethernet")
 make test               # gpib-core's host tests, the bootloader's image and update-stage tests
 make SIM=1 [flash]      # build-sim/: gpib-core's simulated instrument at GPIB 5 instead of the plug
 make bringup [SIM=1] [STAGE=flash|log|usb|usbtmc|net] [HOST=ip]   # tools/bringup.py: the bring-up checks below
 ```
 
-**No GPIB plug (SIM=1):** without a bus ATN reads low, so the normal firmware waits for an instrument and never
-starts USB or the network services. `make SIM=1` swaps the GPIB lines for gpib-core's simulated SCPI instrument
+**No GPIB plug (SIM=1):** without a bus ATN reads low, so the normal firmware waits for an instrument: the network and
+web page (with the firmware update) run, USB and the instrument ports (VXI-11, 5025, 1234) don't. `make SIM=1` swaps the GPIB lines for gpib-core's simulated SCPI instrument
 (`gpib-core/sim/`: `*IDN?` = `LANGPIB,SIMULATED,0,0.1`, `MEAS?`, `BLOCK? n`, echoes other queries) and leaves the
 GPIB pins untouched. It enumerates as "LAN GPIB adapter (simulated GPIB)", logs `GPIB: SIMULATED instrument`, and
 `make production` refuses it. Everything but the GPIB lines can be brought up this way: USB, Ethernet, VXI-11, 5025,
@@ -68,6 +65,17 @@ multilib); the core also has Zba/Zbb/Zbs and vector, unused.
 
 ## CH32V407 specifics
 
+- **RAM_CODE_MOD** is FLASH_OBR bit 8 (RM 32.4.6), user option byte bit 6; WCH's `FLASH_OBR_RAM_CODE_MOD` (0x0200, bit
+  9) is wrong, likely from the CH32V30x two-bit field. Board 1 reads OBR 0x03fffefc (user byte 0xBF, factory): bit 8 =
+  0, so 200 KB RAM + 512 KB zero-wait flash. A one-off test wrote and read back RAM at 136.25 KB and 199.75 KB without
+  mirroring low RAM (2026-11-21). The web page's Chip row shows the setting.
+- **RAM layout** (`ch32v407_app.ld`): .data and .bss in the first 127.75 KB, then NOINIT (256 B at 0x2001FF00: the
+  trap record; the bootloader's 64 KB stays below it). RAM_HI from 128 KB: the 8 KB stack (below 136 KB, so it also
+  runs with RAM_CODE_MOD = 1); 136-200 KB above it is free (64 KB, needs RAM_CODE_MOD = 0). Whatever goes there later
+  (TLS buffers) needs its own section, zeroed by the app (not the `startup.S` the bootloader shares), and a check of
+  FLASH_OBR bit 8 first, or a chip set to 136 KB faults at boot.
+  Board 1, 2026-11-21: network update to this layout, 40 page loads in a row OK.
+
 - **Clocks:** WCH's 400 / 200 MHz setup: 25 MHz HSE x16 = 400 MHz SYSCLK, HCLK = APB1 = APB2 = 200 MHz, flash clock
   HCLK / 2 (100 MHz max). Without the crystal the PLL runs from the 20 MHz HSI; USB and Ethernet need the HSE, so the LED
   shows `LED_NO_CLOCK` and the firmware stops there.
@@ -84,9 +92,9 @@ multilib); the core also has Zba/Zbb/Zbs and vector, unused.
   bus). DIO1-8 are on PB8-PB15 out of bit order: one `GPIOB->INDR` read and a 256-entry table in, one `BSHR` write and
   a table out.
 - **RAM:** about three-quarters is network buffers: lwIP's pbuf pool 24.5 KB and heap 16 KB, VXI-11's connections
-  19 KB, Ethernet DMA 24 KB. The linker scripts take 128 KB, which holds under either `RAM_CODE_MOD` option-byte
-  setting (RM 32.6: 1 = 576 KB code + 136 KB RAM, 0 = 512 KB code + 200 KB RAM). If RAM runs short, programming
-  `RAM_CODE_MOD` = 0 over SDI gives 200 KB; code already stays in the first 512 KB.
+  19 KB, Ethernet DMA 24 KB. The chips come with `RAM_CODE_MOD` = 0 (200 KB RAM, 512 KB
+  zero-wait code; 1 would be 136 KB + 576 KB, RM 32.6); the app uses the first 128 KB plus its stack at 128-136 KB
+  (RAM layout above), and code stays in the first 512 KB.
 - **Watchdog:** IWDG, LSI / 64, 2500 counts, about 4 s; stopped while a debugger halts the core (DBGMCU_CR is CSR 0x7C0).
   The LSI must be started first (RCC_RSTSCKR.LSION): without it the IWDG never takes its prescaler and reload.
 - **UART:** USART1 TX on J4 (PA9, 115200 8N1): gpib-core's bus trace and a blocking bring-up log (`board_log()`), which
@@ -145,7 +153,7 @@ bits (a plain XOR fold gave every board of one chip lot the same last two bytes,
 ## Network settings and mDNS
 
 - **Settings** (gpib-core `netcfg.c`), the same command as `!net` on USBTMC and `++net` on Prologix (USB or TCP 1234):
-  `net` (query: `dhcp; ip 192.168.1.23; name langpib-1a2b; update off`), `net dhcp` (the default: DHCP, AutoIP
+  `net` (query: `dhcp; ip 192.168.1.23; name langpib-1a2b; update open`), `net dhcp` (the default: DHCP, AutoIP
   169.254.x.x if no server answers), `net static <ip> <mask> [<gateway>]`, `net name <host>` / `net name default`,
   `net password <pw>` / `net password off` (firmware update over Ethernet; from USB only). Saved at once,
   applied by `net_init()` at the next reset (`++rst` or a power cycle), so changing the address from the network
@@ -160,13 +168,17 @@ bits (a plain XOR fold gave every board of one chip lot the same last two bytes,
 - **Web page** (gpib-core `http.c`, TCP 80, three connections, a new one replaces the oldest):
   - `/`: the instrument (GPIB address, `*IDN?`, VISA strings), the network (address, mask, gateway, MAC), serial and
     firmware, and a form for the network settings (`POST /net`, the same `net` command; invalid values are refused
-    with a message, nothing changes), and the firmware update form (`POST /update`, below) once a password is set.
-  - `/lxi/identification`: the LXI identification XML (schema 1.0), for Keysight Connection Expert, NI MAX and the
+    with a message, nothing changes), and the firmware update form (`POST /update`, below; a password field only once one is set). While the
+    instrument search runs, "Searching for an instrument" in place of the instrument and VISA strings.
+  - `/lxi/identification`: the LXI identification XML (schema 1.0; while searching, no instrument and no address strings), for Keysight Connection Expert, NI MAX and the
     like. It validates against the LXI Consortium's XSD. `LXIVersion` says 1.6, but the adapter isn't LXI-certified
     and doesn't do the rest of LXI (LAN reset button, LCI, IPv6).
-  - No authentication for the settings, like ports 1234 and 5025, which can change the same; only the firmware
-    update needs its password. The page is rendered again for
-    each TCP window rather than buffered, so it costs no RAM per connection beyond the request (~400 B).
+  - No authentication for the settings, like ports 1234 and 5025, which can change the same; the firmware update
+    needs the password only if one is set. A POST (settings or update) from a browser must come from the adapter's
+    own page: an `Origin` other than `http://<its address or name>` or a `Host` that isn't its address, `<hostname>`
+    or `<hostname>.local` gets 403, so another site's script (a `no-cors` fetch needs no preflight) or a rebound DNS
+    name can't change settings or install firmware. curl and `make netdfu` send neither and are unaffected. The page is rendered again for
+    each TCP window rather than buffered, so it costs no RAM per connection beyond the request (~500 B).
   - On the Mac: `make host` in gpib-core, `build/host/vxi11_host` serves the page on `http://127.0.0.1:8080/`.
 
 ## Raw SCPI (TCP 5025) and Prologix (TCP 1234)
@@ -217,21 +229,36 @@ after the WCH repo's `docs/bootloader-design.md`.
   suffix after it; `-sdi.hex` is header + image for the probe.
 - **USB IDs:** still pid.codes' test PID 1209:0001, as on the siblings (design question B2).
 
+## Firmware update in the browser, and releases
+
+Users update at <https://jlpoltrack.github.io/GPIB-Adapters/> (Chrome or Edge, WebUSB; no dfu-util): Update
+firmware, pick the adapter. The page tells the boards apart by their USB strings (the bootloader by bcdDevice 0xDF10
+and its DFU-mode interface), sends DFU_DETACH, checks the `.dfu` (suffix CRC, header magic, length and image CRC),
+strips the 16-byte suffix and downloads header + image in 4 KB blocks from block 0, as dfu-util does. Chrome may need
+a second pick for the bootloader (same VID:PID, new device). With no instrument found, hold SW1 while plugging in.
+Code: `USBGPIB-STM32/web/src/adapters.ts`, `dfu.ts`.
+
+Releases: push a tag `vX.Y` on main. `.github/workflows/pages.yml` builds and tests both firmwares, creates the GitHub
+Release with `LANGPIB-WCH-vX.Y.dfu` and `USBGPIB-STM32-vX.Y.bin`, and deploys the page with those same files (repo
+variable `PAGES_ENABLED`; the `github-pages` environment must allow `v*` tags). Pushes and PRs only build and test.
+CI uses the xPack toolchain release pinned in the workflow (keep it equal to the local one).
+
 ## Firmware update over Ethernet
 
 For adapters with no computer on their USB port (powered from a charger or a PoE splitter). The same `.dfu` as for
 USB DFU goes up by HTTP POST; the app checks it into a stage in unused flash and the bootloader installs it
 (`src/update.c`, `bootloader/stage.c`, gpib-core `http.c` and `netcfg.c`).
 
-- **Turning it on:** off until an update password is set over USB: `++net password <pw>` on the CDC port or
-  `!net password <pw>` over USBTMC (1-32 printable ASCII characters, no spaces); `net password off` turns it off again.
-  Prologix on TCP 1234 and the web page can't set or clear it. The `net` query ends `update on` or `update off`, never
-  the password. It is kept in the settings log in plain text (readable only through the SDI probe).
-- **Uploading:** `make netdfu HOST=<ip or name> PASSWORD=<pw>` (`SIM=1` sends `build-sim/`'s), which runs
+- **Password:** none by default: updates are open to anyone on the network (user, 2026-11-21: updates without USB or
+  an instrument). `++net password <pw>` on the CDC port or `!net password <pw>` over USBTMC (1-32 printable ASCII
+  characters, no spaces) makes it required; `net password off` opens it again. Prologix on TCP 1234 and the web page
+  can't set or clear it. The `net` query ends `update open` or `update password`, never the password. It is kept in
+  the settings log in plain text (readable only through the SDI probe).
+- **Uploading:** `make netdfu HOST=<ip or name> [PASSWORD=<pw>]` (`SIM=1` sends `build-sim/`'s), which runs
   `curl --data-binary @build/langpib.dfu -H 'X-Update-Password: <pw>' -H 'Expect:' http://<host>/update`; or the
-  "Firmware update" form on the web page (a file picker and the password; the page's script sends the same request).
+  "Firmware update" form on the web page (a file picker, and the password if one is set; the page's script sends the same request).
   Replies: 200 staged (the adapter resets 0.5 s later to install it, about a second, then starts the new firmware);
-  403 updates off or wrong password; 429 within 1 s of a wrong password; 400 not a valid image; 413 too large;
+  403 wrong password; 429 within 1 s of a wrong password; 400 not a valid image; 413 too large;
   411 no Content-Length; 500 flash error; 409 another upload took over. A refused upload changes nothing that runs.
 - **Flash:** the app area (0x08004000-0x0807DFFF, 488 KB) is split in half. Header + app sit below 0x08041000, the
   stage (header page + image, the same layout) from there to the settings. So an update, and an app, can be at most
@@ -258,9 +285,19 @@ USB DFU goes up by HTTP POST; the app checks it into a stage in unused flash and
   that loses power mid-operation: staging in any chunk sizes, every refusal (a bad header before any flash write), and
   a power cut at every erase and program of both the staging and the install (a 150 KB image: 625 operations), each
   followed by a boot without the flag.
-- **Not covered:** the password crosses the LAN in clear (no HTTPS), and images aren't signed: anyone with the password
-  can install any image with a valid header. The web page keeps three connections, a new one replacing the oldest, so
+- **Not covered:** with no password anyone on the network can install any image with a valid header; a password
+  crosses the LAN in clear (no HTTPS), and images aren't signed. The web page keeps three connections, a new one replacing the oldest, so
   a burst of other requests during an upload drops it (409 or a reset; the stage stays invalid).
+- **Without an instrument:** the web page (and so the update form and `make netdfu`) runs from start-up, before the
+  instrument search ("Searching for an instrument" in place of the ID and VISA strings); VXI-11, raw SCPI and Prologix
+  open once an instrument is found. Board 1, 2026-11-21: page up and `make netdfu` with no instrument and no password.
+  The resets for a lost bus (`update_reset()`) install a staged image first, so a "staged" reply is never dropped.
+- **Deferred (user, 2026-11-21):**
+  - HTTPS: mbedTLS through lwIP's altcp_tls. Flash is no issue, and RAM now is: a TLS session needs ~30-40 KB, and
+    136-200 KB (above the stack) is free. A `.local` device can't get a browser-trusted certificate,
+    so it means a self-signed one and a browser warning (or the user's own CA). A few days' work.
+  - Signed images (the bootloader refuses an image not signed with the user's key): the real protection for updates,
+    1-2 days. Cheaper: challenge-response so the password doesn't cross the LAN, about a day.
 
 ## Production
 
@@ -290,11 +327,11 @@ older ones left the flash half unlocked after the mass erase, and the next secto
 | 0 | Skeleton, board layer, USB driver, Ethernet driver, lwIP glue, DFU bootloader | nothing | written, builds |
 | 1 | Bring-up: SDI flash, UART log (reset cause, 200 MHz, UID), LED, watchdog, settings across a reset | PCB + probe | done, board 1 |
 | 2 | USB: enumeration, USBTMC + CDC with gpib-core's simulated instrument or a real one | PCB | done: simulator, HP 3456A, HP 66332A |
-| 3 | Ethernet: PHY ID, link, LEDs, ping, DHCP / AutoIP | PCB + LAN | done except DHCP from a server and 10M |
+| 3 | Ethernet: PHY ID, link, LEDs, ping, DHCP / AutoIP | PCB + LAN | done |
 | 4 | VXI-11 (gpib-core `tools/vxi11_check.py <ip> --board`), both transports at once | PCB + instrument | done (3456A, 66332A) |
-| 5 | DFU on hardware: SW1 / detach entry, download, power cut mid-download, bootloader self-update | PCB | detach, download and self-update done; SW1 and power cut open |
+| 5 | DFU on hardware: SW1 / detach entry, download, power cut mid-download, bootloader self-update | PCB | detach, download, self-update and SW1 done; power cut skipped |
 | 5b | Production script on a board (`make production`) | PCB + probe | done: boards 2-5 |
-| 5c | Firmware update over Ethernet (`make netdfu`, web form) | PCB + LAN | done on board 1 (curl); web form open |
+| 5c | Firmware update over Ethernet (`make netdfu`, web form) | PCB + LAN | done on board 1 (curl); web form reviewed in code |
 | 6 | Extras: raw 5025 and Prologix 1234 | PCB + LAN | done (simulator and both instruments) |
 | 7 | Extras: network settings (`!net` / `++net`), mDNS | PCB + LAN | done (`++net name` across a reset, mDNS browse) |
 | 8 | Web page and LXI identification; Connection Expert / NI MAX find it | PCB + LAN | page and XML served; Connection Expert / NI MAX not tried |
@@ -336,16 +373,25 @@ Not yet tested on a board (board 1). Tick each off here with the result.
   after a line with `?`, which the 3456A takes as a syntax error: `T3?` gives no reading, so trigger over the others.
 - [ ] Scope a DIO falling edge and the data-to-DAV settle time at the 2 MHz pin speed, on the longest cable in use.
   Traffic: `tools/bus_traffic.py <ip>` (3005-byte writes over VXI-11 to any SCPI instrument; trigger on DAV, J3 pin 6).
+  Skipped (user, 2026-11-21).
 - [ ] Pin self-test guard: ATN tied to GND through a low resistance gives `ATN stuck low` and no pulses on other lines.
   Skipped (user, 2026-11-21): every line is open-drain, so a stuck line can't be fought.
 - [ ] FT pins with the board unpowered: 5 V through 3k into a J3 pin should sit near 5 V (an unpowered adapter must not
   load the bus; the datasheet doesn't cover VDD = 0).
 
 **Ethernet**
-- [ ] 10M link: force the partner to 10baseT. TX is polarity-inverted at the jack and relies on the partner's polarity
+  Skipped (user, 2026-11-21).
+- [x] 10M link: force the partner to 10baseT. TX is polarity-inverted at the jack and relies on the partner's polarity
   correction at 10BASE-T (hardware review).
+  Done (board 1 straight to a Mac, `sudo ifconfig en0 media 10baseT/UTP mediaopt half-duplex`, 2026-11-21): link at
+  10 Mbit half duplex, AutoIP; 30 pings (10 of 1400 bytes) 0 lost, 20 page loads OK, a 123 KB `make netdfu` staged in
+  under 1 s and the board came back on the same link; the Mac's en0 counted 0 errors and 0 collisions. So the
+  partner's polarity correction handles the inverted TX pair at 10BASE-T.
 - [ ] A partner without auto-MDIX (old switch or NIC with it off): the link and the logged MDI / MDI-X state.
-- [ ] DHCP from a real server (so far only AutoIP, cabled straight to a Mac).
+  Skipped (user, 2026-11-21): no partner without auto-MDIX at hand (a Mac can't turn it off).
+- [x] DHCP from a real server: board 1 on a home router got a lease (192.168.1.109), answers ping and
+  `langpib-92ce.local` (2026-11-21, no instrument: the instrument ports refuse until one is found, as designed; since then the web page
+  on 80 runs from start-up).
   Cabled straight to a Mac, the board answers ping 23 s after a reset (instrument search, ~10 s of DHCP tries, then
   AutoIP's probes); `bringup.py net` straight after a flash fails ping and HTTP for that reason, not a fault.
 - [ ] Long run (hours, traffic on all ports): no `rx_missed` growth, no lwIP memory exhaustion, no resets.
@@ -353,6 +399,7 @@ Not yet tested on a board (board 1). Tick each off here with the result.
   alongside; no reset. The `loop:` line now carries the Ethernet counters: in the 4 min load above, 93 of 332k RX
   frames missed (`rx_missed`, the 6-buffer RX ring full in bursts; TCP resent them), no RX or TX errors. With 12 RX
   buffers (+9 KB RAM, now) the same load missed 0 of 338k. Hours still to run.
+  Skipped (user, 2026-11-21).
 - [x] TCP throughput far above GPIB rates (2026-11-21): the 3 KB web page, a new connection each, 165 pages/s = 490 KB/s
   while VXI-11 traffic ran, against 4-7 KB/s from the instruments over GPIB. (The simulator caps replies at 254 B, so
   it can't measure long reads.)
@@ -363,13 +410,15 @@ Not yet tested on a board (board 1). Tick each off here with the result.
   queries/s, USBTMC 75 and 5025 76 commands/s, 1234 328 serial polls/s, the web page 9/s; 0 errors in 157k requests)
   33-38k passes/s, so ~70 % busy with the longest pass 4 ms. The web page flat out (133 pages/s) alone takes it to
   ~5k passes/s and a 21 ms pass: the page is rendered again for every TCP window.
-- [ ] 3V3 current with Ethernet and USB active; U3's dissipation at (5 - 3.3) V x I; 3V3 stays >= 3.2 V on a weak
-  5 V supply (AMS1117 dropout, ceramic-only output caps).
+- [x] Current with Ethernet up: under 200 mA at the USB-C (user, board 1, 2026-11-21; plan.md estimated 150-200). U3
+  (AMS1117, SOT-223) then dissipates at most (5 - 3.3) V x 0.2 A = 0.34 W, about 20-30 degC above ambient at 60-90
+  degC/W on the board's copper. 3V3 on a weak 5 V supply (AMS1117 dropout, ceramic-only output caps) not measured.
 
 **USB and DFU**
 - [x] SW1 held while plugging in: DFU, and `make dfu` downloads (2026-11-21). Its 2 Hz blink then looked like the app's
   "no GPIB bus" blink, so the bootloader now double-blinks.
 - [ ] Power cut mid-download stays in DFU; a CRC failure stays in DFU.
+  Skipped (user, 2026-11-21).
 - [x] USB-C plugged in reversed: powers and enumerates (2026-11-21). A C-to-C cable (both CC resistors) not tried.
 - [x] `board_usb_connect()` waited for the USB PLL with no timeout (a PLL that never locks was a 4 s watchdog loop):
   now a bounded wait; no lock leaves USB off with `USB: PLL didn't lock, USB off` in the log, and Ethernet runs on.
@@ -377,15 +426,19 @@ Not yet tested on a board (board 1). Tick each off here with the result.
 **Firmware update over Ethernet** (SIM build is enough; UART log on J4)
 - [x] Good image (board 1, 2026-11-21): `make netdfu` with the real build onto the SIM build: 200, `update: staged`,
   the real build boots (no `SIMULATED` line) ~20 s after the upload began, the stage reads erased after. The web form
-  (same endpoint, from a browser) not tried yet.
-- [x] Wrong password 403, again within a second 429, no password set 403, `++net password` over TCP 1234 ignored
-  (`update off` stays); the app keeps running (2026-11-21).
+  (same endpoint, from a browser): not tried on hardware (user, 2026-11-21: curl covers it); reviewed in code: the
+  server reads only Content-Length and X-Update-Password (long browser headers are cut and ignored), `fetch()` with a
+  File body sends Content-Length and no Expect, same-origin so no preflight, and with no password set the script sends
+  no password header.
+- [x] Wrong password 403, again within a second 429, `++net password` over TCP 1234 ignored
+  (no password stays); the app keeps running (2026-11-21). No password set (the default): open, three uploads with no
+  instrument attached installed (2026-11-21).
 - [x] One byte of the `.dfu` changed, and a 4 KB non-image: 400 "nothing changed", no reset (2026-11-21).
 - [x] Copy cut short (2026-11-21, a probe halt + reset 0.4 s after `update: resetting to install`, app header already
   erased, stage valid): the next boot copied again and started the new firmware. A real power cut takes the same
   path (it doesn't use the flag). Cut at 0.15 s, before the copy began (both headers intact), the old app booted
   and the stage stayed unused: the flag is cleared at entry, so the update is dropped, not retried (safe; send it
   again). A USB DFU download onto a board with such a staged but uninstalled image: the stage reads erased after,
-  the downloaded app runs (2026-11-21). A real power cut mid-copy isn't tested: pulling the cable during an update
+  the downloaded app runs (2026-11-21). A real power cut mid-copy isn't tested (skipped, user, 2026-11-21): pulling the cable during an update
   isn't a supported use (user, 2026-11-21), and the reset above takes the same recovery path.
 - [x] Flash programming in the app with USB and SysTick interrupts on: every upload above staged and verified.

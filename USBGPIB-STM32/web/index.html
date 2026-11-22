@@ -3,23 +3,46 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>USB GPIB Adapter</title>
-    <meta name="description" content="Configure the USBGPIB-STM32 adapter and talk to GPIB instruments from the browser (Web Serial)." />
+    <title>GPIB Adapters</title>
+    <meta name="description" content="Update USBGPIB-STM32 and LANGPIB-WCH firmware over WebUSB; configure the adapter and talk to GPIB instruments (Web Serial)." />
   </head>
   <body>
     <header>
       <div>
-        <h1>USB GPIB Adapter</h1>
+        <h1>GPIB Adapters</h1>
         <p class="sub" id="version">Not connected</p>
       </div>
       <button id="connect" class="primary">Connect</button>
     </header>
 
     <p id="unsupported" class="banner" hidden>
-      This page needs Web Serial: use Chrome or Edge on a desktop computer.
+      This page needs WebUSB and Web Serial: use Chrome or Edge on a desktop computer.
     </p>
 
     <main>
+      <section class="card wide" id="fw-card">
+        <h2>Firmware update</h2>
+        <p id="fw-release">Release firmware: <span id="fw-info">none on this page (choose a file below)</span></p>
+        <p class="hint">For USBGPIB-STM32 and LANGPIB-WCH. Plug the adapter in, click Update firmware and pick it in
+          the list: the page finds which adapter it is, restarts it into its updater and writes the matching firmware.</p>
+        <div class="row fw-steps">
+          <button id="fw-update" class="primary">Update firmware</button>
+          <label class="check"><input type="radio" name="fw-src" value="latest" id="fw-latest" disabled /> Release</label>
+          <label class="check"><input type="radio" name="fw-src" value="file" id="fw-file-radio" checked />
+            <input type="file" id="fw-file" accept=".bin,.dfu" aria-label="Firmware file" /></label>
+        </div>
+        <progress id="fw-progress" max="1" value="0"></progress>
+        <p id="fw-status" aria-live="polite"></p>
+        <details>
+          <summary>The adapter isn't in the list</summary>
+          <p class="hint">An adapter only starts USB once it has found a GPIB instrument. Without one, unplug it, hold
+            SW1 while plugging it back in (LANGPIB-WCH: D1 double-blinks; USBGPIB-STM32: the LED stops blinking) and
+            click Update firmware again. In the list the updater shows as "LAN GPIB adapter DFU" (LANGPIB-WCH) or
+            "DAPBoot DFU Bootloader" (USBGPIB-STM32). Linux needs a udev rule giving your user access to 1209:0001
+            and 1209:db42. Use Chrome or Edge on a desktop computer.</p>
+        </details>
+      </section>
+
       <section class="card" id="settings-card">
         <h2>Serial port settings</h2>
         <form id="settings">
@@ -84,20 +107,6 @@
         </div>
       </section>
 
-      <section class="card" id="fw-card">
-        <h2>Firmware update</h2>
-        <label class="check"><input type="radio" name="fw-src" value="latest" id="fw-latest" disabled /> <span>Latest build
-          <span class="hint" id="fw-info">(not available here)</span></span></label>
-        <label class="check"><input type="radio" name="fw-src" value="file" id="fw-file-radio" checked />
-          <input type="file" id="fw-file" accept=".bin" /></label>
-        <div class="row fw-steps">
-          <button id="fw-detach">1. Restart into updater</button>
-          <button id="fw-flash" class="primary">2. Flash</button>
-        </div>
-        <progress id="fw-progress" max="1" value="0"></progress>
-        <p class="hint" id="fw-status">Step 1 is not needed if the adapter is already in the updater (button held while
-          plugging in). Linux needs a udev rule for 1209:db42.</p>
-      </section>
 
       <section class="card wide" id="term-card">
         <div class="row">
@@ -117,7 +126,7 @@
     </main>
 
     <footer>
-      <a href="https://github.com/jlpoltrack/GPIB-Adapters/tree/main/USBGPIB-STM32">USBGPIB-STM32 on GitHub</a>
+      <a href="https://github.com/jlpoltrack/GPIB-Adapters">GPIB-Adapters on GitHub</a>
     </footer>
     <script type="module" src="/src/main.ts"></script>
   </body>

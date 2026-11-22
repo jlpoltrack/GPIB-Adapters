@@ -8,9 +8,9 @@
 
 enum { ST_LINE, ST_HEADERS, ST_BODY, ST_UPLOAD, ST_DRAIN, ST_SEND, ST_DONE };
 enum { M_GET, M_HEAD, M_POST, M_OTHER };
-enum { PG_HOME, PG_IDENT, PG_NOT_FOUND, PG_BAD, PG_METHOD, PG_TOO_LARGE, PG_UPDATE };
+enum { PG_HOME, PG_IDENT, PG_NOT_FOUND, PG_BAD, PG_METHOD, PG_TOO_LARGE, PG_FORBIDDEN, PG_UPDATE };
 enum { MSG_NONE, MSG_SAVED, MSG_BAD_ADDR, MSG_BAD_NAME };
-enum { UPD_STAGED, UPD_OFF, UPD_PW, UPD_WAIT, UPD_LENGTH, UPD_TOO_LARGE, UPD_IMAGE, UPD_FLASH, UPD_SUPERSEDED };
+enum { UPD_STAGED, UPD_PW, UPD_WAIT, UPD_LENGTH, UPD_TOO_LARGE, UPD_IMAGE, UPD_FLASH, UPD_SUPERSEDED };
 
 #define PW_WAIT_MS 1000u      /* after a wrong password, every attempt is refused for this long */
 #define DRAIN_MAX  (1u << 20) /* a refused upload is read and dropped up to this, so the client sees the reply */
@@ -24,6 +24,7 @@ __attribute__((weak)) int board_update_begin(uint32_t len) { (void)len; return H
 __attribute__((weak)) int board_update_write(const uint8_t *buf, uint32_t n) { (void)buf; (void)n; return HTTP_UPD_FLASH; }
 __attribute__((weak)) int board_update_end(void) { return HTTP_UPD_FLASH; }
 __attribute__((weak)) void board_update_done(void) {}
+__attribute__((weak)) const char *board_chip_info(void) { return NULL; }
 
 const char *http_firmware(void)
 {
@@ -133,6 +134,23 @@ static void out_ip(out_t *o, const uint8_t ip[4])
 	}
 }
 
+/* dotted decimal into buf[16] */
+static void ip_text(const uint8_t ip[4], char *buf)
+{
+	unsigned k = 0;
+	for (int i = 0; i < 4; i++) {
+		unsigned v = ip[i];
+		if (i)
+			buf[k++] = '.';
+		if (v >= 100)
+			buf[k++] = (char)('0' + v / 100u);
+		if (v >= 10)
+			buf[k++] = (char)('0' + (v / 10u) % 10u);
+		buf[k++] = (char)('0' + v % 10u);
+	}
+	buf[k] = '\0';
+}
+
 static void out_mac(out_t *o, const uint8_t mac[6])
 {
 	static const char hex[] = "0123456789ABCDEF";
@@ -213,21 +231,19 @@ static const char s_style[] =
 static void update_form(out_t *o)
 {
 	outs(o, "<h2>Firmware update</h2>\n");
-	if (!netcfg_password_set()) {
-		outs(o, "<p class=\"sub\">Off. Set an update password over USB to turn it on: <code>++net password "
-		        "&lt;password&gt;</code> (Prologix) or <code>!net password &lt;password&gt;</code> (USBTMC).</p>\n");
-		return;
-	}
+	bool pw = netcfg_password_set(); /* none set (the default): open to this network */
 	outs(o, "<form id=\"fw\"><table>\n");
 	row(o, "Image");
 	outs(o, "<input type=\"file\" name=\"f\" accept=\".dfu\" required></td></tr>\n");
-	row(o, "Password");
-	outs(o, "<input type=\"password\" name=\"p\" required></td></tr>\n</table>\n"
-	        "<p><button>Update</button> <span class=\"sub\" id=\"fws\">The <code>.dfu</code> file, as for USB DFU; "
+	if (pw) {
+		row(o, "Password");
+		outs(o, "<input type=\"password\" name=\"p\" required></td></tr>\n");
+	}
+	outs(o, "</table>\n<p><button>Update</button> <span class=\"sub\" id=\"fws\">The <code>.dfu</code> file, as for USB DFU; "
 	        "the adapter restarts to install it.</span></p></form>\n"
 	        "<script>document.getElementById('fw').onsubmit=async e=>{e.preventDefault();const f=e.target,"
 	        "s=document.getElementById('fws');s.textContent='Uploading...';try{const r=await fetch('/update',"
-	        "{method:'POST',headers:{'X-Update-Password':f.p.value},body:f.f.files[0]});s.textContent=await r.text()}"
+	        "{method:'POST',headers:f.p?{'X-Update-Password':f.p.value}:{},body:f.f.files[0]});s.textContent=await r.text()}"
 	        "catch(x){s.textContent='Failed: '+x}};</script>\n");
 }
 
@@ -257,43 +273,37 @@ static void page_home(out_t *o, const http_t *h, const info_t *in)
 		outs(o, "<div class=\"msg bad\">Not saved: a hostname is 1-23 letters, digits and inner hyphens.</div>\n");
 
 	if (in->net) { /* the address as text, for the VISA strings */
-		unsigned k = 0;
-		for (int i = 0; i < 4; i++) {
-			unsigned v = in->st.ip[i];
-			if (i)
-				ipbuf[k++] = '.';
-			if (v >= 100)
-				ipbuf[k++] = (char)('0' + v / 100u);
-			if (v >= 10)
-				ipbuf[k++] = (char)('0' + (v / 10u) % 10u);
-			ipbuf[k++] = (char)('0' + v % 10u);
-		}
-		ipbuf[k] = '\0';
+		ip_text(in->st.ip, ipbuf);
 		ipaddr = ipbuf;
 	}
 
 	outs(o, "<h2>Instrument</h2><table>\n");
-	row(o, "GPIB address");
-	out_u(o, gpib_addr);
-	outs(o, "</td></tr>\n");
-	row(o, "Identification");
-	if (id[0])
-		esc(o, id);
-	else
-		outs(o, "<span class=\"sub\">none found</span>");
-	outs(o, "</td></tr>\n");
-	if (ipaddr) {
-		row(o, "VISA");
-		visa(o, ipaddr, "::inst0::INSTR", "");
-		if (in->st.hostname[0]) {
-			char host[NETCFG_NAME_MAX + 7];
-			strcpy(host, in->st.hostname);
-			strcat(host, ".local");
-			visa(o, host, "::inst0::INSTR", "");
+	if (!instr_ready()) { /* still searching: nothing to identify, and the instrument ports aren't open yet */
+		row(o, "Status");
+		outs(o, "Searching for an instrument. VXI-11, raw SCPI and Prologix open once one answers.</td></tr>\n");
+	} else {
+		row(o, "GPIB address");
+		out_u(o, gpib_addr);
+		outs(o, "</td></tr>\n");
+		row(o, "Identification");
+		if (id[0])
+			esc(o, id);
+		else
+			outs(o, "<span class=\"sub\">none found</span>");
+		outs(o, "</td></tr>\n");
+		if (ipaddr) {
+			row(o, "VISA");
+			visa(o, ipaddr, "::inst0::INSTR", "");
+			if (in->st.hostname[0]) {
+				char host[NETCFG_NAME_MAX + 7];
+				strcpy(host, in->st.hostname);
+				strcat(host, ".local");
+				visa(o, host, "::inst0::INSTR", "");
+			}
+			visa(o, ipaddr, "::gpib0,<i>N</i>::INSTR", "any GPIB address");
+			visa(o, ipaddr, "::5025::SOCKET", "raw SCPI");
+			outs(o, "Prologix on TCP port 1234</td></tr>\n");
 		}
-		visa(o, ipaddr, "::gpib0,<i>N</i>::INSTR", "any GPIB address");
-		visa(o, ipaddr, "::5025::SOCKET", "raw SCPI");
-		outs(o, "Prologix on TCP port 1234</td></tr>\n");
 	}
 	outs(o, "</table>\n");
 
@@ -321,6 +331,12 @@ static void page_home(out_t *o, const http_t *h, const info_t *in)
 	row(o, "Firmware");
 	outs(o, http_firmware());
 	outs(o, "</td></tr>\n");
+	const char *chip = board_chip_info();
+	if (chip) {
+		row(o, "Chip");
+		esc(o, chip);
+		outs(o, "</td></tr>\n");
+	}
 	row(o, "LXI");
 	outs(o, "<a href=\"/lxi/identification\">identification</a></td></tr>\n</table>\n");
 
@@ -358,10 +374,15 @@ static void page_ident(out_t *o, const info_t *in)
 	outs(o, in->serial);
 	outs(o, "</SerialNumber>\n  <FirmwareRevision>");
 	outs(o, http_firmware());
-	outs(o, "</FirmwareRevision>\n  <ManufacturerDescription>LAN to GPIB adapter; GPIB ");
-	out_u(o, gpib_addr);
-	outs(o, ": ");
-	esc(o, instr_id()[0] ? instr_id() : "no instrument found");
+	outs(o, "</FirmwareRevision>\n  <ManufacturerDescription>LAN to GPIB adapter; ");
+	if (instr_ready()) {
+		outs(o, "GPIB ");
+		out_u(o, gpib_addr);
+		outs(o, ": ");
+		esc(o, instr_id()[0] ? instr_id() : "no instrument found");
+	} else {
+		outs(o, "searching for an instrument"); /* no VXI-11 or raw SCPI yet: no address strings either */
+	}
 	outs(o, "</ManufacturerDescription>\n");
 	if (in->net) {
 		outs(o, "  <HomepageURL>http://");
@@ -376,11 +397,15 @@ static void page_ident(out_t *o, const info_t *in)
 		out_ip(o, in->st.ip);
 		outs(o, "/lxi/identification</IdentificationURL>\n"
 		        "  <Interface xsi:type=\"NetworkInformation\" InterfaceType=\"LXI\" IPType=\"IPv4\" "
-		        "InterfaceName=\"eth0\">\n    <InstrumentAddressString>TCPIP::");
-		out_ip(o, in->st.ip);
-		outs(o, "::inst0::INSTR</InstrumentAddressString>\n    <InstrumentAddressString>TCPIP::");
-		out_ip(o, in->st.ip);
-		outs(o, "::5025::SOCKET</InstrumentAddressString>\n    <Hostname>");
+		        "InterfaceName=\"eth0\">\n");
+		if (instr_ready()) {
+			outs(o, "    <InstrumentAddressString>TCPIP::");
+			out_ip(o, in->st.ip);
+			outs(o, "::inst0::INSTR</InstrumentAddressString>\n    <InstrumentAddressString>TCPIP::");
+			out_ip(o, in->st.ip);
+			outs(o, "::5025::SOCKET</InstrumentAddressString>\n");
+		}
+		outs(o, "    <Hostname>");
 		esc(o, in->st.hostname);
 		outs(o, ".local</Hostname>\n    <IPAddress>");
 		out_ip(o, in->st.ip);
@@ -403,7 +428,6 @@ static const struct {
 	const char *status, *text;
 } s_upd[] = {
 	[UPD_STAGED]     = { "200 OK", "OK: image checked and staged; the adapter restarts to install it\n" },
-	[UPD_OFF]        = { "403 Forbidden", "network updates are off: set a password over USB (++net password ...)\n" },
 	[UPD_PW]         = { "403 Forbidden", "wrong password\n" },
 	[UPD_WAIT]       = { "429 Too Many Requests", "wait a second after a wrong password\n" },
 	[UPD_LENGTH]     = { "411 Length Required", "Content-Length required\n" },
@@ -434,6 +458,9 @@ static void body(out_t *o, const http_t *h, const info_t *in)
 	case PG_TOO_LARGE:
 		outs(o, "request too large\n");
 		break;
+	case PG_FORBIDDEN:
+		outs(o, "refused: not from the adapter's own page\n");
+		break;
 	default:
 		outs(o, "bad request\n");
 		break;
@@ -443,7 +470,7 @@ static void body(out_t *o, const http_t *h, const info_t *in)
 static void response(out_t *o, const http_t *h, const info_t *in)
 {
 	static const char *const status[] = { "200 OK", "200 OK", "404 Not Found", "400 Bad Request",
-	                                      "405 Method Not Allowed", "413 Content Too Large" };
+	                                      "405 Method Not Allowed", "413 Content Too Large", "403 Forbidden" };
 	outs(o, "HTTP/1.1 ");
 	outs(o, (h->page == PG_UPDATE) ? s_upd[h->msg].status : status[h->page]);
 	outs(o, "\r\nContent-Type: ");
@@ -628,17 +655,17 @@ static uint32_t update_body(http_t *h, const uint8_t *p, uint32_t n)
 	return k;
 }
 
-/* end of an upload's headers: the password, then the board takes the body; a refused body is read and dropped */
+/* end of an upload's headers: the password if one is set, then the board takes the body; a refused body is read and dropped */
 static void update_start(http_t *h)
 {
 	uint32_t now = board_millis();
 	int r;
 
-	if (!netcfg_password_set()) {
-		h->msg = UPD_OFF;
-	} else if (s_pw_failed && ((now - s_pw_failed_at) < PW_WAIT_MS)) {
+	bool locked = netcfg_password_set(); /* no password (the default): open to this network */
+
+	if (locked && s_pw_failed && ((now - s_pw_failed_at) < PW_WAIT_MS)) {
 		h->msg = UPD_WAIT;
-	} else if (!h->pw_ok) {
+	} else if (locked && !h->pw_ok) {
 		h->msg = UPD_PW;
 		s_pw_failed = true;
 		s_pw_failed_at = now;
@@ -658,10 +685,63 @@ static void update_start(http_t *h)
 	h->state = (h->has_len && h->left && (h->left <= DRAIN_MAX)) ? ST_DRAIN : ST_SEND;
 }
 
+/* a Host or Origin host[:port] names this adapter: its address, <hostname> or <hostname>.local (case aside) */
+static bool is_us(const char *v, size_t n)
+{
+	netcfg_status_t st = { 0 };
+	char ip[16];
+	const char *colon = memchr(v, ':', n);
+
+	if (colon)
+		n = (size_t)(colon - v);
+	if (!board_net_status(&st))
+		return false;
+	ip_text(st.ip, ip);
+	if ((n == strlen(ip)) && !memcmp(v, ip, n))
+		return true;
+	size_t hn = st.hostname ? strlen(st.hostname) : 0;
+	if (!hn || ((n != hn) && (n != hn + 6)))
+		return false;
+	for (size_t i = 0; i < n; i++) {
+		char c = v[i], e = (i < hn) ? st.hostname[i] : ".local"[i - hn];
+		if ((c >= 'A') && (c <= 'Z'))
+			c = (char)(c + 'a' - 'A');
+		if ((e >= 'A') && (e <= 'Z'))
+			e = (char)(e + 'a' - 'A');
+		if (c != e)
+			return false;
+	}
+	return true;
+}
+
+/* a POST is refused when a browser says it comes from elsewhere: another site's page (Origin) or a rebound name (Host) */
+static bool same_site(const http_t *h)
+{
+	if (h->host[0] && !is_us(h->host, strlen(h->host)))
+		return false;
+	if (!h->origin[0])
+		return true;
+	return !strncmp(h->origin, "http://", 7) && is_us(&h->origin[7], strlen(&h->origin[7]));
+}
+
+static void keep(char *dst, size_t max, char *v)
+{
+	trim(v);
+	if (strlen(v) >= max)
+		v = "?"; /* too long for any of our names: never matches */
+	strcpy(dst, v);
+}
+
 static void header_line(http_t *h)
 {
 	if (h->line_len == 0) { /* end of the headers */
 		h->state = ST_SEND;
+		if ((h->method == M_POST) && (h->page != PG_METHOD) && (h->page != PG_NOT_FOUND) && !same_site(h)) {
+			h->page = PG_FORBIDDEN;
+			h->left = h->content_len; /* read and drop the body, so the client gets the reply */
+			h->state = (h->has_len && h->left && (h->left <= DRAIN_MAX)) ? ST_DRAIN : ST_SEND;
+			return;
+		}
 		if ((h->method == M_POST) && (h->page == PG_HOME)) {
 			if (h->content_len > HTTP_BODY_MAX)
 				h->page = PG_TOO_LARGE;
@@ -685,6 +765,10 @@ static void header_line(http_t *h)
 		char *v = &h->line[18];
 		trim(v);
 		h->pw_ok = netcfg_password_ok(v);
+	} else if (starts_ci(h->line, "host:")) {
+		keep(h->host, sizeof(h->host), &h->line[5]);
+	} else if (starts_ci(h->line, "origin:")) {
+		keep(h->origin, sizeof(h->origin), &h->line[7]);
 	}
 }
 

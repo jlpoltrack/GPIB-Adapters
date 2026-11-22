@@ -96,6 +96,7 @@ void net_init(void)
 	if (!fixed)
 		dhcp_start(&s_netif); /* AutoIP takes over if no server answers */
 	mdns_lwip_init(&s_netif, s_hostname);
+	sockets_lwip_web_init(); /* web page and firmware update from the start, instrument or not */
 	board_log("net: %s, %s.local\n", fixed ? "static" : "dhcp", s_hostname);
 }
 
@@ -109,7 +110,8 @@ void net_start_services(void)
 	s_services = true;
 }
 
-void net_poll(void)
+/* frames in, link state, lwIP timers */
+static void net_poll(void)
 {
 	const uint8_t *f;
 	unsigned n;
@@ -152,6 +154,7 @@ void net_poll(void)
 void net_task(void)
 {
 	net_poll();
+	sockets_lwip_web_task();
 	if (s_services) {
 		vxi11_lwip_task();
 		sockets_lwip_task();

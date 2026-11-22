@@ -77,6 +77,14 @@ make -C Firmware dfu          # later: the running app restarts into dapboot
 `dfu-util` may end with `unable to read DFU status` (exit 74): that is harmless, dapboot resets as it finishes.
 The app embeds dapboot and rewrites it at boot when it differs, so a USB update of the app updates the bootloader too.
 
+Without dfu-util: open <https://jlpoltrack.github.io/GPIB-Adapters/> in Chrome or Edge, click Update firmware and
+pick the adapter. The page also updates LANGPIB-WCH; it finds which adapter is plugged in and writes the latest
+release. Without an instrument on the bus, hold SW1 while plugging in first.
+
+Releases: push a tag `vX.Y` on main. The workflow (`.github/workflows/pages.yml`) builds and tests both firmwares,
+creates the GitHub Release with `USBGPIB-STM32-vX.Y.bin` and `LANGPIB-WCH-vX.Y.dfu`, and deploys the web page with
+those files (when the repo variable `PAGES_ENABLED` is `true`). Pushes and PRs only build and test.
+
 ## Use
 
 The adapter only appears on USB once it has found an instrument, and the USBTMC side binds to that instrument. The serial port reaches any address on the bus, e.g. `++addr 5`, then `*IDN?` and `++read eoi`. Without an instrument the LED blinks; hold SW1 while plugging in to reach dapboot.

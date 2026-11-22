@@ -16,6 +16,7 @@ void instr_init(void);
  * (watchdog, later the network). Returns false if the bus went away while searching: the caller resets. */
 bool instr_startup(void (*idle)(void));
 const char *instr_id(void);
+bool        instr_ready(void); /* instr_startup() has found the instrument */
 
 char instr_get_readterm(void); /* '\n', '\r', or 0 for EOI only */
 void instr_set_readterm(char term);

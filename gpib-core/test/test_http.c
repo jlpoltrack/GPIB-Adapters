@@ -20,6 +20,9 @@ uint32_t board_millis(void) { return s_now; }
 uint8_t gpib_addr = 7;
 static const char *s_id = "ACME,<M1> & co,42,1.0";
 const char *instr_id(void) { return s_id; }
+static bool s_ready = true;
+bool instr_ready(void) { return s_ready; }
+const char *board_chip_info(void) { return "CH32 <test> & co"; }
 
 bool board_net_status(netcfg_status_t *st)
 {
@@ -147,15 +150,15 @@ static void test_home_in_windows(void)
 {
 	static char whole[16384];
 	setup();
-	strcpy(whole, get("GET / HTTP/1.1\r\nHost: x\r\n\r\n", 1000, 100000));
+	strcpy(whole, get("GET / HTTP/1.1\r\nHost: langpib-34f0.local\r\n\r\n", 1000, 100000));
 	assert(!strncmp(whole, "HTTP/1.1 200 OK\r\n", 17) && strstr(whole, "Content-Type: text/html"));
 	assert(content_length(whole) == strlen(body_of(whole)));
 	for (uint32_t room = 1; room < 1500; room = room * 3 + 1) {
-		const char *r = get("GET / HTTP/1.1\r\nHost: x\r\n\r\n", 3, room);
+		const char *r = get("GET / HTTP/1.1\r\nHost: langpib-34f0.local\r\n\r\n", 3, room);
 		assert(!strcmp(r, whole)); /* the same bytes, whatever the windows */
 	}
 	for (int slots = 1; slots < 20; slots += 3) /* a full queue takes less than the window (seen on the board) */
-		assert(!strcmp(get_slots("GET / HTTP/1.1\r\nHost: x\r\n\r\n", 1000, 5840, slots), whole));
+		assert(!strcmp(get_slots("GET / HTTP/1.1\r\nHost: langpib-34f0.local\r\n\r\n", 1000, 5840, slots), whole));
 	assert(strstr(whole, "ACME,&lt;M1&gt; &amp; co,42,1.0")); /* escaped */
 	assert(strstr(whole, "TCPIP::192.168.1.23::inst0::INSTR") && strstr(whole, "langpib-34f0.local::inst0::INSTR"));
 	assert(strstr(whole, "02:AB:00:12:34:F0") && strstr(whole, "value=\"dhcp\" checked"));
@@ -193,7 +196,7 @@ static void test_errors(void)
 static void test_waits_for_request(void)
 {
 	setup();
-	strcpy(s_in, "GET / HTTP/1.1\r\nHost: x\r\n");
+	strcpy(s_in, "GET / HTTP/1.1\r\nHost: langpib-34f0.local\r\n");
 	s_in_len = (uint32_t)strlen(s_in);
 	s_chunk = 100;
 	for (int i = 0; i < 10; i++) {
@@ -239,7 +242,7 @@ static void test_form(void)
 /* POST /update with the body; pw NULL: no password header; len false: no Content-Length */
 static const char *upload(const char *pw, const uint8_t *data, uint32_t n, bool len, uint32_t chunk)
 {
-	int k = snprintf(s_in, sizeof(s_in), "POST /update HTTP/1.1\r\nHost: x\r\nContent-Type: application/octet-stream\r\n");
+	int k = snprintf(s_in, sizeof(s_in), "POST /update HTTP/1.1\r\nHost: langpib-34f0.local\r\nContent-Type: application/octet-stream\r\n");
 	if (pw)
 		k += snprintf(&s_in[k], sizeof(s_in) - (size_t)k, "X-Update-Password:  %s \r\n", pw);
 	if (len)
@@ -264,17 +267,19 @@ static void test_update(void)
 	assert(!strncmp(upload("pw", s_blob, 100, true, 64), "HTTP/1.1 404", 12) && !s_begins);
 	assert(!strstr(get("GET / HTTP/1.1\r\n\r\n", 1000, 100000), "Firmware update"));
 
-	s_upd_on = true; /* no password set: off */
-	assert(strstr(get("GET / HTTP/1.1\r\n\r\n", 1000, 100000), "Off. Set an update password over USB"));
+	s_upd_on = true; /* no password set: open, the form has no password field */
+	const char *home = get("GET / HTTP/1.1\r\n\r\n", 1000, 100000);
+	assert(strstr(home, "id=\"fw\"") && !strstr(home, "type=\"password\""));
 	assert(!strncmp(get("GET /update HTTP/1.1\r\n\r\n", 100, 9999), "HTTP/1.1 405", 12));
-	strcpy(r, upload("", s_blob, 5000, true, 333));
-	assert(!strncmp(r, "HTTP/1.1 403", 12) && strstr(r, "updates are off") && !s_begins);
-	assert(s_in_pos == s_in_len); /* a refused body is still read, so the client gets the reply */
+	strcpy(r, upload(NULL, s_blob, 5000, true, 333)); /* no header */
+	assert(!strncmp(r, "HTTP/1.1 200", 12) && strstr(r, "staged") && (s_begins == 1) && (s_dones == 1));
+	assert((s_img_len == 5000) && !memcmp(s_img, s_blob, 5000));
+	assert(!strncmp(upload("anything", s_blob, 5000, true, 333), "HTTP/1.1 200", 12)); /* a header is ignored */
 
 	char line[] = "net password Op3n-Sesame";
 	char *argv[3] = { "net", "password", &line[13] };
 	netcfg_command(3, argv, r, sizeof(r), true);
-	assert(strstr(get("GET / HTTP/1.1\r\n\r\n", 1000, 100000), "id=\"fw\"")); /* the upload form */
+	assert(strstr(get("GET / HTTP/1.1\r\n\r\n", 1000, 100000), "type=\"password\"")); /* the form asks for it */
 
 	s_now = 5000;
 	strcpy(r, upload("wrong", s_blob, 5000, true, 333));
@@ -351,6 +356,85 @@ static void test_update_superseded(void)
 	assert(s_closed && !strncmp(s_out, "HTTP/1.1 409", 12) && !s_dones && (s_img_len == 2000));
 }
 
+static void test_searching(void)
+{
+	setup();
+	s_ready = false; /* no instrument yet: the page and the update form, no ID or VISA strings */
+	const char *r = get("GET / HTTP/1.1\r\nHost: langpib-34f0.local\r\n\r\n", 1000, 100000);
+	assert(!strncmp(r, "HTTP/1.1 200 OK\r\n", 17) && (content_length(r) == strlen(body_of(r))));
+	assert(strstr(r, "Searching for an instrument") && !strstr(r, "ACME") && !strstr(r, "::INSTR"));
+	assert(strstr(r, "02:AB:00:12:34:F0"));
+	s_ready = true;
+}
+
+/* a POST only from the adapter's own page: another site's Origin, a rebound Host or Origin "null" get 403 */
+static void test_same_site(void)
+{
+	static char req[1024];
+	static const char *const bad[] = { "Origin: http://evil.example\r\n", "Origin: null\r\n",
+	                                   "Origin: https://langpib-34f0.local\r\n", "Host: evil.example\r\n",
+	                                   "Host: langpib-34f0.local.evil.example\r\n", "Host: 192.168.1.230\r\n" };
+	static const char *const good[] = { "Origin: http://langpib-34f0.local\r\nHost: langpib-34f0.local\r\n",
+	                                    "Origin: http://192.168.1.23:80\r\nHost: 192.168.1.23:80\r\n",
+	                                    "Host: LANGPIB-34F0\r\n", "" };
+	const char *form = "mode=static&ip=10.0.0.9&mask=255.255.255.0";
+	setup();
+	for (unsigned i = 0; i < sizeof(bad) / sizeof(bad[0]); i++) {
+		snprintf(req, sizeof(req), "POST /net HTTP/1.1\r\n%sContent-Length: %u\r\n\r\n%s", bad[i],
+		         (unsigned)strlen(form), form);
+		const char *r = get(req, 7, 700);
+		assert(!strncmp(r, "HTTP/1.1 403", 12) && strstr(r, "not from the adapter's own page"));
+		assert(settings.net_mode != NET_MODE_STATIC && (s_in_pos == s_in_len)); /* nothing applied, body read */
+	}
+	for (unsigned i = 0; i < sizeof(good) / sizeof(good[0]); i++) {
+		snprintf(req, sizeof(req), "POST /net HTTP/1.1\r\n%sContent-Length: %u\r\n\r\n%s", good[i],
+		         (unsigned)strlen(form), form);
+		assert(strstr(get(req, 7, 700), "msg ok") && (settings.net_ip[3] == 9));
+		settings.net_mode = NET_MODE_DHCP;
+	}
+	/* an open update from another site's script (no-cors fetch: no preflight) */
+	s_upd_on = true;
+	int k = snprintf(s_in, sizeof(s_in), "POST /update HTTP/1.1\r\nHost: langpib-34f0.local\r\n"
+	                                     "Origin: http://evil.example\r\nContent-Length: 3000\r\n\r\n");
+	memcpy(&s_in[k], s_blob, 3000);
+	s_begins = 0;
+	const char *r = run_in((uint32_t)k + 3000, 500, 1460, 1000000);
+	assert(!strncmp(r, "HTTP/1.1 403", 12) && !s_begins && (s_in_pos == s_in_len));
+	/* GET is unaffected: the page itself may be read from anywhere */
+	assert(!strncmp(get("GET / HTTP/1.1\r\nHost: evil.example\r\n\r\n", 1000, 100000), "HTTP/1.1 200", 12));
+}
+
+/* the LXI document while searching: no instrument, no address strings for ports that aren't open */
+static void test_ident_searching(void)
+{
+	setup();
+	s_ready = false;
+	const char *r = get("GET /lxi/identification HTTP/1.1\r\n\r\n", 50, 999);
+	assert(strstr(r, "searching for an instrument") && !strstr(r, "ACME") && !strstr(r, "InstrumentAddressString"));
+	assert(strstr(r, "<IPAddress>192.168.1.23</IPAddress>"));
+	s_ready = true;
+}
+
+/* a wrong password's 1 s wait ends when the password is cleared (open again) */
+static void test_lockout_cleared(void)
+{
+	char r[512], line[] = "abc";
+	char *set[3] = { "net", "password", line }, off[] = "off", *clear[3] = { "net", "password", off };
+	setup();
+	s_upd_on = true;
+	s_now = 100000;
+	netcfg_command(3, set, r, sizeof(r), true);
+	assert(!strncmp(upload("wrong", s_blob, 2000, true, 500), "HTTP/1.1 403", 12));
+	netcfg_command(3, clear, r, sizeof(r), true);
+	assert(!strncmp(upload(NULL, s_blob, 2000, true, 500), "HTTP/1.1 200", 12) && (s_begins == 1));
+}
+
+static void test_chip_row(void)
+{
+	setup();
+	assert(strstr(get("GET / HTTP/1.1\r\n\r\n", 1000, 100000), "<td>Chip</td><td>CH32 &lt;test&gt; &amp; co</td>"));
+}
+
 static void test_firmware_version(void)
 {
 	assert(!strcmp(http_firmware(), "0.0.0")); /* APP_USB_BCD 0x0000 in test/app_config.h */
@@ -365,6 +449,11 @@ int main(void)
 	test_form();
 	test_update();
 	test_update_superseded();
+	test_searching();
+	test_same_site();
+	test_ident_searching();
+	test_lockout_cleared();
+	test_chip_row();
 	test_firmware_version();
 	puts("http: all tests passed");
 	return 0;

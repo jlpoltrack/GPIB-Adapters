@@ -48,6 +48,13 @@ void board_update_done(void)
 	s_install_at = board_millis() + INSTALL_DELAY_MS;
 }
 
+void update_reset(void)
+{
+	if (s_install) /* the client was told "staged": don't drop it */
+		board_install_update();
+	board_reset();
+}
+
 void update_task(void)
 {
 	if (s_install && ((int32_t)(board_millis() - s_install_at) >= 0))

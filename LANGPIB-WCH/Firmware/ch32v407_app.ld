@@ -6,8 +6,9 @@ MEMORY
 {
   FLASH    (rx)  : ORIGIN = APP_ORIGIN, LENGTH = 0x0807E000 - APP_ORIGIN
   SETTINGS (r)   : ORIGIN = 0x0807E000, LENGTH = 8K   /* two 4 KB erase sectors */
-  RAM      (rwx) : ORIGIN = 0x20000000, LENGTH = 128K - 256 /* fits either RAM_CODE_MOD setting */
+  RAM      (rwx) : ORIGIN = 0x20000000, LENGTH = 128K - 256
   NOINIT   (rw)  : ORIGIN = 0x2001FF00, LENGTH = 256        /* the bootloader's RAM stays below this */
+  RAM_HI   (rwx) : ORIGIN = 0x20020000, LENGTH = 72K        /* to 200 KB: RAM_CODE_MOD = 0 (factory; firmware.md) */
 }
 
 __stack_size = 8K; /* lwIP mDNS probe tie-breaking nests ~3.3 KB of frames (-fstack-usage), plus net path and USB IRQ */
@@ -58,10 +59,13 @@ SECTIONS
     . = ALIGN(4);
   } > NOINIT
 
+  /* the stack first in RAM_HI: below 136 KB, so it also runs with RAM_CODE_MOD = 1 */
   .stack (NOLOAD) : ALIGN(16)   /* no heap: nothing mallocs */
   {
     . += __stack_size;
     __stack_top = .;
     PROVIDE(end = .);           /* nano vsnprintf links malloc (for asprintf), never called here */
-  } > RAM
+  } > RAM_HI
+  ASSERT(__stack_top <= 0x20022000, "the stack must stay below 136 KB")
+  /* RAM_HI above the stack (136-200 KB) is free; a section placed there needs RAM_CODE_MOD = 0 checked before use */
 }

@@ -3,7 +3,9 @@
 
 /* A small HTTP server on a port_t, one connection each: the adapter's page ("/"), the LXI identification document
  * ("/lxi/identification", LXI Identification schema 1.0), the network settings form (POST /net, via netcfg) and,
- * where the board supports it, a firmware upload (POST /update, X-Update-Password: netcfg's password).
+ * where the board supports it, a firmware upload (POST /update, X-Update-Password: netcfg's password, if set).
+ * A POST from a browser must come from the adapter's own page: an Origin or Host that isn't the adapter gets 403
+ * (another site's script, DNS rebinding); clients without them (curl) are unaffected.
  * Every response closes its connection. Nothing is buffered on the way out: the response is rendered again for each
  * piece TCP takes, and only that window goes to the port. */
 
@@ -12,7 +14,8 @@
 #include "port.h"
 
 #define HTTP_PORT     80
-#define HTTP_LINE_MAX 128 /* request line; header lines are only scanned for Content-Length */
+#define HTTP_LINE_MAX 128 /* request line; header lines are only scanned for Content-Length, the password, Host, Origin */
+#define HTTP_HOST_MAX 48  /* Host / Origin kept for the same-site check on POST */
 #define HTTP_BODY_MAX 256 /* the settings form; an upload is streamed to the board instead */
 
 typedef struct {
@@ -22,6 +25,7 @@ typedef struct {
 	uint16_t      line_len, body_len;
 	uint32_t      content_len, left; /* left: upload bytes still to come */
 	char          line[HTTP_LINE_MAX];
+	char          host[HTTP_HOST_MAX], origin[HTTP_HOST_MAX + 8];
 	char          body[HTTP_BODY_MAX + 1];
 	uint32_t      sent, total, body_size;
 } http_t;

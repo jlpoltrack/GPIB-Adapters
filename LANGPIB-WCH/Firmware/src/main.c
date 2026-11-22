@@ -36,7 +36,6 @@ void tud_dfu_runtime_reboot_to_dfu_cb(void)
 	s_dfu_detach = true;
 }
 
-/* during instrument start-up: the network keeps up (DHCP, ARP), VXI-11 isn't listening yet */
 /* main-loop passes/s, the longest pass and the Ethernet counters, on the UART every minute (headroom: loaded vs idle) */
 static void loop_stats(uint32_t pass_start)
 {
@@ -58,10 +57,14 @@ static void loop_stats(uint32_t pass_start)
 	}
 }
 
+/* during instrument start-up: the network and web page keep up (status, settings, firmware update); the instrument
+ * ports (VXI-11, raw SCPI, Prologix) aren't listening yet */
 static void idle(void)
 {
 	board_watchdog_feed();
-	net_poll();
+	net_task();
+	settings_task();
+	update_task();
 }
 
 /* Rewrites the bootloader's sectors from the embedded copy when they differ. Sector 0 (its _start) goes last: only a
@@ -133,7 +136,7 @@ int main(void)
 
 	if (!instr_startup(idle)) { /* bus unplugged while searching: start over */
 		board_delay_ms(500);
-		board_reset();
+		update_reset();
 	}
 
 	net_start_services();
@@ -164,7 +167,7 @@ int main(void)
 			board_led_mode(LED_OFF);
 			board_usb_disconnect();
 			board_delay_ms(500);
-			board_reset();
+			update_reset();
 		}
 	}
 }

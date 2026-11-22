@@ -227,6 +227,20 @@ uint32_t board_reset_cause(void)
 	return s_reset_cause;
 }
 
+/* The web page's "Chip" row: the RAM / zero-wait flash split and the flash size (ESIG F_SIZE). RAM_CODE_MOD is FLASH_OBR
+ * bit 8 (RM 32.4.6), not WCH's FLASH_OBR_RAM_CODE_MOD (bit 9): board 1 reads 0 there and its RAM past 136 KB works. */
+const char *board_chip_info(void)
+{
+	static char s[96];
+	uint32_t obr = FLASH->OBR;
+	bool mod = (obr >> 8) & 1u;
+
+	snprintf(s, sizeof(s), "CH32V407, %u KB flash; RAM_CODE_MOD %u: %s RAM, %s zero-wait (OBR 0x%08lx)",
+	         *(volatile uint16_t *)0x1FFFF7E0u, (unsigned)mod, mod ? "136 KB" : "200 KB", mod ? "576 KB" : "512 KB",
+	         (unsigned long)obr);
+	return s;
+}
+
 void board_get_uid_hex(char *buf)
 {
 	static const char hex[] = "0123456789ABCDEF";

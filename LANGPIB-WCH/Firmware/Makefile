@@ -127,13 +127,13 @@ bringup: all
 dfu: all
 	dfu-util -w -d $(APP_VID):$(APP_PID) -a 0 -D $(BUILD)/$(PROJECT).dfu
 
-# Network: POST the same .dfu to the web server (gpib-core http.c, src/update.c); PASSWORD as set over USB with
-# '++net password'. 'Expect:' is cleared: the server doesn't answer 100-continue. The password isn't echoed.
+# Network: POST the same .dfu to the web server (gpib-core http.c, src/update.c); PASSWORD only if one was set over
+# USB with '++net password' (none: open). 'Expect:' is cleared: the server doesn't answer 100-continue. The password isn't echoed.
 netdfu: all
-	@test -n "$(HOST)" || { echo "make netdfu HOST=<ip or name> PASSWORD=<update password>"; exit 1; }
+	@test -n "$(HOST)" || { echo "make netdfu HOST=<ip or name> [PASSWORD=<update password>]"; exit 1; }
 	@echo "curl -> http://$(HOST)/update"
 	@curl -sS --fail-with-body -H 'Expect:' -H 'Content-Type: application/octet-stream' \
-	    -H "X-Update-Password: $(PASSWORD)" --data-binary @$(BUILD)/$(PROJECT).dfu http://$(HOST)/update
+	    $(if $(PASSWORD),-H "X-Update-Password: $(PASSWORD)") --data-binary @$(BUILD)/$(PROJECT).dfu http://$(HOST)/update
 
 # clangd: the same flags for editor diagnostics
 compile_flags.txt: Makefile

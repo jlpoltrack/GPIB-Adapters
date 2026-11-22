@@ -184,9 +184,11 @@ static void test_stage_refused(void)
 	d = copy(s_b);
 	((app_header_t *)d.dfu)->magic ^= 1;
 	assert((stage(d, 1000) == STAGE_BAD_IMAGE) && !s_ops);
+	free(d.dfu);
 	d = copy(s_b);
 	((app_header_t *)d.dfu)->length += 1; /* disagrees with the length sent */
 	assert((stage(d, 1000) == STAGE_BAD_IMAGE) && !s_ops);
+	free(d.dfu);
 	d = copy(s_b);
 	((app_header_t *)d.dfu)->length = STAGE_MAX_LEN + 1;
 	assert((stage(d, 1000) == STAGE_TOO_LARGE) && !s_ops);
@@ -194,15 +196,18 @@ static void test_stage_refused(void)
 	assert(stage_begin(&w, FLASH_PAGE + DFU_SUFFIX_LEN) == STAGE_BAD_IMAGE);
 	assert(!s_ops);
 
+	free(d.dfu);
 	d = copy(s_b); /* one bit in the image: the suffix CRC catches it */
 	d.dfu[FLASH_PAGE + 5000] ^= 0x10;
 	assert(stage(d, 1460) == STAGE_BAD_IMAGE);
 	fix_suffix_crc(d); /* and with a matching suffix, the header's CRC does */
 	assert(stage(d, 1460) == STAGE_BAD_IMAGE);
+	free(d.dfu);
 	d = copy(s_b);
 	d.dfu[d.len - 8] = 'X'; /* not a DFU suffix */
 	fix_suffix_crc(d);
 	assert(stage(d, 1460) == STAGE_BAD_IMAGE);
+	free(d.dfu);
 
 	/* too few or too many bytes */
 	assert(stage_begin(&w, s_b.len) == STAGE_OK);

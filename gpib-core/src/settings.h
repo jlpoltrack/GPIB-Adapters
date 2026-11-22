@@ -30,7 +30,7 @@ typedef struct {
 	uint8_t  net_mode;       /* NET_MODE_* */
 	uint8_t  net_ip[4], net_mask[4], net_gw[4]; /* NET_MODE_STATIC */
 	char     net_name[24];   /* hostname and mDNS name; empty: the board's own (langpib-XXXX) */
-	char     update_pw[33];  /* firmware update over the network (http.c); empty: off. Set from USB only */
+	char     update_pw[33];  /* firmware update over the network (http.c); empty: open. Set from USB only */
 } settings_t;
 
 extern settings_t settings;

@@ -14,10 +14,10 @@ EOI PC10, DAV PC11, NRFD PC12, NDAC PD2, IFC PB3, SRQ PB4, ATN PB5; DFU PD8, sta
 / PD15 (yellow, J2.12) with `ETHPHY_LED_RM`; USB PA11 / PA12; SDI PA13 / PA14; USART1 PA9 / PA10. Spare: PA1, PA2, PC13-15.
 MDI pairs and polarity are swapped at the jack (Auto-MDIX + polarity detection): firmware must leave Auto-MDIX on.
 
-**Placement (2026-11-04, user):** board 57.15 x 46.2 (LANGPIB-STM32 outline). J2 (139.9, 114.5, 90) and J1 (152.2, 125.2, 90)
-at LANGPIB-STM32's spots, so its enclosure's jack / USB openings fit. J3 (116.7, 133.3). U1 (114, 118.5, 180), 2 mm north of
+**Placement (2026-11-04, user):** board 57.15 x 46.2. J2 (139.9, 114.5, 90) and J1 (152.2, 125.2, 90)
+on the right edge. J3 (116.7, 133.3). U1 (114, 118.5, 180), 2 mm north of
 the first routing. U3 (133, 124.1, 90): tab north, pins south, +5V caps C3 / C2 east on the trunk, +3V3 caps C4 / C6 / C5
-west on one F.Cu +3V3 area. SW1 (106, 101.9) and D1 (102.2, 107.6) top left (SW1 is 5.6 mm west of LANGPIB-STM32's).
+west on one F.Cu +3V3 area. SW1 (106, 101.9) and D1 (102.2, 107.6) top left.
 
 **Routing (by hand, `route_pre.py`):** In1 GND, In2 +3V3 (0.12 clearance so J3's pin rows keep plane necks), GND pours on
 F/B, per-pad GND vias, 3 mm stitching grid, teardrops.
@@ -33,9 +33,9 @@ F/B, per-pad GND vias, 3 mm stitching grid, teardrops.
 
 **Cost:** $50.28 for 5 assembled (JLC quote 2026-11-04; `jlc_cost.py` $50.24; 4 layers, J2 hand-fitted for $4.77, no extended fee).
 
-**Enclosure:** cad-tools `projects/LANGPIB-WCH/` -> `Enclosure/` (LANGPIB-STM32's case adapted: SW1 flex tab in the top-left
-corner, D1 through a left-wall arch window, posts clear of J4 / J3; `interference: none`, no supports). Fit test (USB-C +
-RJ45 side): `Enclosure/fit-test/README.md`.
+**Enclosure:** cad-tools `projects/LANGPIB-WCH/` -> `Enclosure/` (snap-fit case, RJ45 brace sized for a 16.1 mm jack, SW1 flex tab
+along the back wall, D1 under a roof light tube, posts clear of J4 / J3; `interference: none`, no supports). Fit tests: `Enclosure/fit-test/README.md` (USB-C +
+RJ45 side), `Enclosure/fit-test-corner/README.md` (D1 tube, SW1 button).
 
 **Firmware (2026-11-04):** phase 0 written and building, DFU bootloader included and embedded in the app
 ([firmware.md](firmware.md)); nothing has run on a CH32V407 yet. Toolchain: xPack riscv-none-elf-gcc in `~/opt`.
@@ -54,10 +54,10 @@ inverted as well as swapped (10BASE-T TX relies on the partner's polarity correc
 J3 pin with the board unpowered (FT pins at VDD = 0 unspecified); both USB-C orientations.
 
 **Production (2026-11-21):** boards 2-5 flashed with `make production`, all pass (log in `production-log.csv`):
-langpib-3b03, -718b, -0c68, -c981. All five were brought up to current main
-(b64c5e6) the same day: board 1 by the probe, boards 2-5 over USB DFU with SW1 (the app starts USB only once an
-instrument is found). Board 1 is langpib-92ce; update passwords are off.
+langpib-3b03, -718b, -0c68, -c981. All five run v0.2.0 (2026-11-21): board 1
+over the network, boards 2-5 over USB DFU with SW1 (the app starts USB only once an instrument is found). Board 1 is
+langpib-92ce; network updates are open (no password set).
 
-**Next:** Bench checks still open: U3 output stable with
-2 x 10u ceramic and the 3V3 current, unpowered FT pins (5 V through 3k), ATN stuck low, 10M link, DHCP, SW1 entry.
-Open: J4 order G D C R (probe) vs rule 14's G C D R; print the fit test.
+**Next:** bench checks are done or skipped (`docs/firmware.md` "Still to verify"; supply under 200 mA, 10M, DHCP and
+SW1 done). Open: J4 order G D C R (probe) vs rule 14's G C D R; print the enclosure's new top (16.1 mm RJ45 brace, D1
+light tube; `Enclosure/fit-test-corner/` first).

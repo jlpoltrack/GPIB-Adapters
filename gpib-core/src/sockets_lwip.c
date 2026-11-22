@@ -187,26 +187,34 @@ static void raw_reset(void *proto) { scpi_raw_reset(proto); }
 static void px_reset(void *proto) { prologix_reset(proto); }
 static void http_reset_(void *proto) { http_reset(proto); }
 
+void sockets_lwip_web_init(void)
+{
+	for (int i = 0; i < SOCKETS_HTTP_CONNS; i++)
+		s_http_port[i] = (tcp_port_t){ .reset = http_reset_, .proto = &s_http[i] };
+	listen_on(&s_http_l, HTTP_PORT);
+	for (int i = 0; i < SOCKETS_HTTP_CONNS; i++)
+		http_init(&s_http[i], &s_http_port[i].port);
+}
+
+void sockets_lwip_web_task(void)
+{
+	for (int i = 0; i < SOCKETS_HTTP_CONNS; i++)
+		if (s_http_port[i].pcb)
+			http_run(&s_http[i]);
+}
+
 void sockets_lwip_init(void)
 {
 	s_raw_port = (tcp_port_t){ .reset = raw_reset, .proto = &s_raw };
 	s_px_port = (tcp_port_t){ .reset = px_reset, .proto = &s_px };
-	for (int i = 0; i < SOCKETS_HTTP_CONNS; i++)
-		s_http_port[i] = (tcp_port_t){ .reset = http_reset_, .proto = &s_http[i] };
 	listen_on(&s_raw_l, SOCKETS_RAW_PORT);
 	listen_on(&s_px_l, SOCKETS_PROLOGIX_PORT);
-	listen_on(&s_http_l, HTTP_PORT);
 	scpi_raw_init(&s_raw, &s_raw_port.port);
 	prologix_init(&s_px, &s_px_port.port, GPIB_OWNER_PX_NET);
-	for (int i = 0; i < SOCKETS_HTTP_CONNS; i++)
-		http_init(&s_http[i], &s_http_port[i].port);
 }
 
 void sockets_lwip_task(void)
 {
 	scpi_raw_run(&s_raw);
 	prologix_run(&s_px);
-	for (int i = 0; i < SOCKETS_HTTP_CONNS; i++)
-		if (s_http_port[i].pcb)
-			http_run(&s_http[i]);
 }

@@ -71,7 +71,8 @@ static void test_idn(void)
 	setup(false);
 	sim_dev_t *d = sim_add(7, -1);
 	d->on_message = answer_idn;
-	assert(instr_startup(idle));
+	assert(!instr_ready()); /* first test: nothing found yet */
+	assert(instr_startup(idle) && instr_ready());
 	assert(gpib_addr == 7 && s_led == LED_ON);
 	assert(!strcmp(instr_id(), "ACME_M1_42_1.0"));
 	settings_flush();

@@ -1,4 +1,5 @@
-// Firmware update over WebUSB: DFU_DETACH to the app's DFU runtime interface, then a DFU 1.1 download to dapboot.
+// Firmware update over WebUSB: DFU_DETACH to the app's DFU runtime interface, then a DFU 1.1 download to the
+// bootloader (dapboot on USBGPIB-STM32, LANGPIB-WCH's own on 1209:0001).
 
 export const APP_FILTER = { vendorId: 0x1209, productId: 0x0001 };
 export const BOOT_FILTER = { vendorId: 0x1209, productId: 0xdb42 };
@@ -33,7 +34,7 @@ async function openDevice(dev: USBDevice): Promise<void> {
   if (!dev.configuration) await dev.selectConfiguration(1);
 }
 
-/** Asks the running adapter to restart into dapboot. */
+/** Asks the running adapter to restart into its bootloader (dapboot or LANGPIB-WCH's). */
 export async function detach(dev: USBDevice): Promise<void> {
   await openDevice(dev);
   const itf = dfuInterface(dev, 1);
@@ -69,8 +70,8 @@ async function waitState(dev: USBDevice, itf: number, want: number): Promise<voi
   throw new Error('The bootloader did not finish writing.');
 }
 
-/** wTransferSize from the DFU functional descriptor, 1024 (dapboot's) if it can't be read. */
-async function transferSize(dev: USBDevice): Promise<number> {
+/** wTransferSize from the DFU functional descriptor, or fallback if it can't be read. */
+async function transferSize(dev: USBDevice, fallback: number): Promise<number> {
   try {
     const r = await dev.controlTransferIn({ requestType: 'standard', recipient: 'device', request: 6, value: 0x0200, index: 0 }, 255);
     const d = new Uint8Array(r.data!.buffer);
@@ -79,11 +80,22 @@ async function transferSize(dev: USBDevice): Promise<number> {
   } catch {
     /* fall back */
   }
-  return 1024;
+  return fallback;
 }
 
-/** Writes image to dapboot; the adapter restarts into it when done. */
-export async function flash(dev: USBDevice, image: Uint8Array, progress: (done: number, total: number) => void): Promise<void> {
+/** Block size: blockSize, if set, is required (LANGPIB-WCH maps block n to 0x08004000 + n * 4 KB). */
+export interface FlashOptions {
+  fallbackSize?: number;
+  blockSize?: number;
+}
+
+/** Writes image to the bootloader; the adapter restarts into it when done. */
+export async function flash(
+  dev: USBDevice,
+  image: Uint8Array,
+  progress: (done: number, total: number) => void,
+  opts: FlashOptions = {},
+): Promise<void> {
   await openDevice(dev);
   const itf = dfuInterface(dev, 2);
   await dev.claimInterface(itf);
@@ -98,7 +110,9 @@ export async function flash(dev: USBDevice, image: Uint8Array, progress: (done: 
     await dev.controlTransferOut({ requestType: 'class', recipient: 'interface', request: ABORT, value: 0, index: itf });
   }
 
-  const size = await transferSize(dev);
+  const size = await transferSize(dev, opts.blockSize ?? opts.fallbackSize ?? 1024);
+  if (opts.blockSize && size !== opts.blockSize)
+    throw new Error(`The bootloader takes ${size}-byte blocks, not ${opts.blockSize}: not the expected bootloader.`);
   let block = 0;
   for (let off = 0; off < image.length; off += size, block++) {
     const chunk = image.slice(off, off + size);

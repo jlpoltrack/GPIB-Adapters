@@ -78,7 +78,7 @@ static void test_parse(void)
 static void test_default_dhcp(void)
 {
 	setup();
-	assert(query_is("dhcp; ip 192.168.1.23; name langpib-1a2b; update off"));
+	assert(query_is("dhcp; ip 192.168.1.23; name langpib-1a2b; update open"));
 }
 
 static void test_static_and_back(void)
@@ -86,13 +86,13 @@ static void test_static_and_back(void)
 	char r[96];
 	setup();
 	assert(cmd("net static 10.0.0.5 255.255.255.0 10.0.0.1", r, sizeof(r)) == 0);
-	assert(query_is("static 10.0.0.5 255.255.255.0 10.0.0.1; ip 192.168.1.23; name langpib-1a2b; update off"));
+	assert(query_is("static 10.0.0.5 255.255.255.0 10.0.0.1; ip 192.168.1.23; name langpib-1a2b; update open"));
 	settings_init(); /* flushed at once: survives a reset */
 	assert(settings.net_mode == NET_MODE_STATIC && settings.net_ip[3] == 5 && settings.net_gw[3] == 1);
 	cmd("net static 10.0.0.6 255.255.0.0", r, sizeof(r)); /* no gateway */
-	assert(query_is("static 10.0.0.6 255.255.0.0 0.0.0.0; ip 192.168.1.23; name langpib-1a2b; update off"));
+	assert(query_is("static 10.0.0.6 255.255.0.0 0.0.0.0; ip 192.168.1.23; name langpib-1a2b; update open"));
 	cmd("net dhcp", r, sizeof(r));
-	assert(query_is("dhcp; ip 192.168.1.23; name langpib-1a2b; update off"));
+	assert(query_is("dhcp; ip 192.168.1.23; name langpib-1a2b; update open"));
 }
 
 static void test_bad_static_ignored(void)
@@ -107,7 +107,7 @@ static void test_bad_static_ignored(void)
 	cmd("net static 10.0.0.5", r, sizeof(r));
 	cmd("net static 10.0.0.5 255.255.255.0 10.0.0.1 extra", r, sizeof(r));
 	cmd("net bogus", r, sizeof(r));
-	assert(query_is("dhcp; ip 192.168.1.23; name langpib-1a2b; update off"));
+	assert(query_is("dhcp; ip 192.168.1.23; name langpib-1a2b; update open"));
 }
 
 static void test_name(void)
@@ -115,11 +115,11 @@ static void test_name(void)
 	char r[96];
 	setup();
 	cmd("net name bench-dmm", r, sizeof(r));
-	assert(query_is("dhcp; ip 192.168.1.23; name bench-dmm; update off"));
+	assert(query_is("dhcp; ip 192.168.1.23; name bench-dmm; update open"));
 	cmd("net name bad.name", r, sizeof(r));
-	assert(query_is("dhcp; ip 192.168.1.23; name bench-dmm; update off"));
+	assert(query_is("dhcp; ip 192.168.1.23; name bench-dmm; update open"));
 	cmd("net name default", r, sizeof(r));
-	assert(query_is("dhcp; ip 192.168.1.23; name langpib-1a2b; update off"));
+	assert(query_is("dhcp; ip 192.168.1.23; name langpib-1a2b; update open"));
 }
 
 static void test_no_network(void)
@@ -157,7 +157,7 @@ static void test_password(void)
 	cmd("net password s3cret!", r, sizeof(r));
 	assert(netcfg_password_set() && netcfg_password_ok("s3cret!"));
 	assert(!netcfg_password_ok("s3cret") && !netcfg_password_ok("s3cret!!") && !netcfg_password_ok(""));
-	assert(query_is("dhcp; ip 192.168.1.23; name langpib-1a2b; update on")); /* never the password itself */
+	assert(query_is("dhcp; ip 192.168.1.23; name langpib-1a2b; update password")); /* never the password itself */
 	settings_init();
 	assert(netcfg_password_ok("s3cret!")); /* in flash */
 
@@ -174,7 +174,7 @@ static void test_password(void)
 	assert(netcfg_password_set());
 	cmd("net password off", r, sizeof(r));
 	assert(!netcfg_password_set() && !netcfg_password_ok(""));
-	assert(query_is("dhcp; ip 192.168.1.23; name langpib-1a2b; update off"));
+	assert(query_is("dhcp; ip 192.168.1.23; name langpib-1a2b; update open"));
 }
 
 static void test_password_via_instr_command(void)

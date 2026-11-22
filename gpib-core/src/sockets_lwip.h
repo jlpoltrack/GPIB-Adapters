@@ -9,7 +9,9 @@
 #define SOCKETS_PROLOGIX_PORT 1234
 #define SOCKETS_HTTP_CONNS    3 /* a browser opens two or three at once */
 
-void sockets_lwip_init(void);
-void sockets_lwip_task(void); /* from the main loop */
+void sockets_lwip_web_init(void); /* web page: with the network, before the instrument search (updates need no instrument) */
+void sockets_lwip_web_task(void); /* from the main loop and while searching */
+void sockets_lwip_init(void);     /* raw SCPI and Prologix: once the instrument is found */
+void sockets_lwip_task(void);     /* from the main loop */
 
 #endif /* SOCKETS_LWIP_H_ */

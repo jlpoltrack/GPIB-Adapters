@@ -30,6 +30,7 @@ uint32_t board_millis(void);
 void board_delay_us(uint32_t us);
 void board_delay_ms(uint32_t ms);
 void board_get_uid_hex(char *buf); /* buf must hold BOARD_SERIAL_LEN + 1 */
+const char *board_chip_info(void); /* a line for the web page's Adapter table, or NULL (http.c's weak default) */
 void board_flash_erase(const void *page);                               /* one BOARD_FLASH_PAGE_SIZE page */
 void board_flash_write(const void *dst, const void *src, unsigned len); /* to erased flash, len a multiple of 4 */
 void board_led_mode(led_mode_t mode);

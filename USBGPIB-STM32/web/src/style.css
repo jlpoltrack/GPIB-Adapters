@@ -247,7 +247,26 @@ progress {
 }
 
 #fw-card label.check {
-  margin-bottom: 6px;
+  margin: 0;
+}
+
+#fw-card input[type='file'] {
+  width: auto;
+  max-width: 100%;
+}
+
+#fw-release {
+  margin: 0 0 4px;
+}
+
+#fw-status {
+  min-height: 1.4em;
+  margin: 8px 0;
+}
+
+#fw-card summary {
+  cursor: pointer;
+  font-size: 14px;
 }
 
 footer {

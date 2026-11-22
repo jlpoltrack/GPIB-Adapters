@@ -7,9 +7,8 @@
 #include <stdint.h>
 
 void     net_init(void);           /* PHY, MAC, lwIP, DHCP */
-void     net_start_services(void); /* VXI-11, once the instrument is found */
-void     net_poll(void);           /* frames in, link state, lwIP timers: safe during instrument start-up */
-void     net_task(void);           /* net_poll() and the VXI-11 connections */
+void     net_start_services(void); /* VXI-11, raw SCPI, Prologix: once the instrument is found */
+void     net_task(void);           /* net_poll(), the web page, and the instrument ports once started */
 uint32_t net_phy_id(void);
 uint32_t net_ip(void);             /* 0 until it has an address */
 

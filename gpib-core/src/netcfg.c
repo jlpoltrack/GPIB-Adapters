@@ -133,7 +133,7 @@ unsigned netcfg_command(int argc, char **argv, char *resp, unsigned max, bool us
 			put_ip(&o, st.ip);
 			put(&o, "; name ");
 			put(&o, st.hostname ? st.hostname : "");
-			put(&o, netcfg_password_set() ? "; update on" : "; update off");
+			put(&o, netcfg_password_set() ? "; update password" : "; update open");
 		}
 		*o.p = '\0';
 		return (unsigned)(o.p - resp);

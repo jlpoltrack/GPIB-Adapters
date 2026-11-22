@@ -1,6 +1,7 @@
 import './style.css';
 import { PrologixClient } from './prologix';
-import { APP_FILTER, BOOT_FILTER, checkImage, detach, flash } from './dfu';
+import { APP_FILTER, BOOT_FILTER, detach, flash } from './dfu';
+import { BOARDS, identify, prepareImage, type Board, type Prepared } from './adapters';
 
 const USB_FILTER = { usbVendorId: 0x1209, usbProductId: 0x0001 };
 
@@ -244,67 +245,144 @@ function captureSave(): void {
 
 /* --- firmware ----------------------------------------------------------------------------------------- */
 
-const LATEST = './firmware/usbgpib.bin';
+interface Release {
+  version: string;
+  date?: string;
+  files: Partial<Record<Board, string>>;
+}
+
+let release: Release | null = null;
+let awaiting: Board | null = null; // detached, but the updater needs a second pick in the chooser
+let pending: Prepared | null = null; // the image checked before detaching
 
 function fwStatus(text: string): void {
   $('fw-status').textContent = text;
 }
 
-async function findLatest(): Promise<void> {
+function setAwaiting(board: Board | null): void {
+  awaiting = board;
+  $('fw-update').textContent = board ? `Continue: choose the ${BOARDS[board].name} updater` : 'Update firmware';
+}
+
+async function findRelease(): Promise<void> {
   try {
     const r = await fetch('./firmware/info.json', { cache: 'no-store' });
     if (!r.ok) return;
-    const info = (await r.json()) as { commit?: string; date?: string };
+    release = (await r.json()) as Release;
     $<HTMLInputElement>('fw-latest').disabled = false;
     $<HTMLInputElement>('fw-latest').checked = true;
-    $('fw-info').textContent = `(${(info.commit ?? '').slice(0, 7)}, ${info.date ?? ''})`;
+    $('fw-info').textContent = `${release.version}${release.date ? ` (${release.date})` : ''}`;
   } catch {
     /* only on the published site */
   }
 }
 
-async function firmwareImage(): Promise<Uint8Array> {
+async function firmwareFor(board: Board): Promise<Prepared> {
+  let bytes: Uint8Array;
   if ($<HTMLInputElement>('fw-latest').checked) {
-    const r = await fetch(LATEST, { cache: 'no-store' });
-    if (!r.ok) throw new Error('Could not download the latest build.');
-    return new Uint8Array(await r.arrayBuffer());
+    const name = release?.files[board];
+    if (!name) throw new Error(`This page has no ${BOARDS[board].name} firmware.`);
+    const r = await fetch(`./firmware/${name}`, { cache: 'no-store' });
+    if (!r.ok) throw new Error(`Could not download ${name}.`);
+    bytes = new Uint8Array(await r.arrayBuffer());
+  } else {
+    const f = $<HTMLInputElement>('fw-file').files?.[0];
+    if (!f) throw new Error('Choose a firmware file first (.bin for USBGPIB-STM32, .dfu for LANGPIB-WCH).');
+    bytes = new Uint8Array(await f.arrayBuffer());
   }
-  const f = $<HTMLInputElement>('fw-file').files?.[0];
-  if (!f) throw new Error('Choose a .bin file first.');
-  return new Uint8Array(await f.arrayBuffer());
+  return prepareImage(board, bytes);
 }
 
-async function fwDetach(): Promise<void> {
-  if (client) { // over the serial port: works on every OS without a WebUSB driver
+function sourceLabel(p: Prepared): string {
+  const v = p.version ? `firmware ${p.version}` : 'the firmware';
+  return $<HTMLInputElement>('fw-latest').checked && release ? `${v} from release ${release.version}` : `${v} from the file`;
+}
+
+/** Polls for the board's updater after a detach; null if it doesn't show up (no permission for it yet). */
+async function waitForUpdater(board: Board, ms = 8000): Promise<USBDevice | null> {
+  for (const end = Date.now() + ms; Date.now() < end; ) {
+    for (const d of await navigator.usb.getDevices()) {
+      const id = identify(d);
+      if (id?.board === board && id.mode === 'boot') return d;
+    }
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  return null;
+}
+
+function boardFromVer(ver: string): Board | null {
+  for (const b of Object.keys(BOARDS) as Board[]) if (ver.startsWith(BOARDS[b].verPrefix)) return b;
+  return null;
+}
+
+/** After a detach: flash if the updater shows up by itself, else ask for a second pick. */
+async function afterDetach(board: Board): Promise<void> {
+  fwStatus(`${BOARDS[board].name} is restarting into its updater…`);
+  const dev = await waitForUpdater(board);
+  if (dev) return writeFirmware(dev, board);
+  setAwaiting(board);
+  fwStatus(`${BOARDS[board].name} is restarting into its updater. Click Continue and pick it in the list.`);
+}
+
+async function writeFirmware(dev: USBDevice, board: Board): Promise<void> {
+  const img = pending ?? (await firmwareFor(board));
+  pending = null;
+  setAwaiting(null);
+  const bar = $<HTMLProgressElement>('fw-progress');
+  bar.value = 0;
+  fwStatus(`Writing ${sourceLabel(img)} to ${BOARDS[board].name}…`);
+  await flash(dev, img.payload, (done, total) => (bar.value = done / total), BOARDS[board].flash);
+  fwStatus(`Done: ${BOARDS[board].name} now has ${sourceLabel(img)} (${img.payload.length} bytes). It restarts by itself.`);
+}
+
+async function fwUpdate(): Promise<void> {
+  if (!('usb' in navigator)) throw new Error('WebUSB is not available: use Chrome or Edge on a desktop computer.');
+
+  if (awaiting) {
+    const board = awaiting;
+    const dev = await navigator.usb.requestDevice({ filters: [BOARDS[board].bootFilter] });
+    const id = identify(dev);
+    if (id?.board !== board || id.mode !== 'boot') throw new Error(`That is not the ${BOARDS[board].name} updater.`);
+    return writeFirmware(dev, board);
+  }
+
+  if (client) { // the settings' serial port is open: restart over it (works on every OS without a WebUSB driver)
+    const board = boardFromVer($('version').textContent ?? '');
+    if (!board) throw new Error('Disconnect the serial port first: the adapter did not say which one it is.');
+    pending = await firmwareFor(board);
     await client.command('dfu');
     await disconnect();
-  } else {
-    if (!('usb' in navigator)) throw new Error('WebUSB is not available in this browser.');
-    await detach(await navigator.usb.requestDevice({ filters: [APP_FILTER] }));
+    return afterDetach(board);
   }
-  fwStatus('The adapter is restarting into the updater. Continue with step 2.');
-}
 
-async function fwFlash(): Promise<void> {
-  if (!('usb' in navigator)) throw new Error('WebUSB is not available in this browser.');
-  const img = await firmwareImage();
-  const problem = checkImage(img);
-  if (problem) throw new Error(problem);
-  const dev = await navigator.usb.requestDevice({ filters: [BOOT_FILTER] });
-  const bar = $<HTMLProgressElement>('fw-progress');
-  fwStatus('Writing…');
-  await flash(dev, img, (done, total) => {
-    bar.value = done / total;
-  });
-  fwStatus(`Done: ${img.length} bytes written. The adapter restarts with the new firmware.`);
+  const dev = await navigator.usb.requestDevice({ filters: [APP_FILTER, BOOT_FILTER] });
+  const id = identify(dev);
+  if (!id) throw new Error(`${dev.productName ?? 'This device'} is not an adapter this page knows.`);
+  pending = await firmwareFor(id.board); // check the image before restarting anything
+  if (id.mode === 'boot') return writeFirmware(dev, id.board);
+  fwStatus(`Found ${BOARDS[id.board].name} running firmware ${id.version}.`);
+  await detach(dev);
+  return afterDetach(id.board);
 }
 
 function fwGuard(op: () => Promise<void>): () => void {
   return () => {
-    op().catch((e: unknown) => {
-      if (e instanceof DOMException && e.name === 'NotFoundError') return; // chooser cancelled
-      fwStatus(e instanceof Error ? e.message : String(e));
-    });
+    const button = $<HTMLButtonElement>('fw-update');
+    button.disabled = true;
+    op()
+      .catch((e: unknown) => {
+        if (!awaiting) pending = null;
+        if (e instanceof DOMException && e.name === 'NotFoundError') {
+          fwStatus(
+            awaiting
+              ? 'Nothing chosen. Pick the updater in the list, or reload the page to start over.'
+              : 'Nothing chosen. If the adapter was not in the list, see below: hold SW1 while plugging it in.',
+          );
+          return;
+        }
+        fwStatus(e instanceof Error ? e.message : String(e));
+      })
+      .finally(() => (button.disabled = false));
   };
 }
 
@@ -341,7 +419,10 @@ $('read').addEventListener('click', guard(readOnce));
 $('capture-start').addEventListener('click', guard(captureStart));
 $('capture-stop').addEventListener('click', guard(captureStop));
 $('capture-save').addEventListener('click', captureSave);
-$('fw-detach').addEventListener('click', fwGuard(fwDetach));
-$('fw-flash').addEventListener('click', fwGuard(fwFlash));
+$('fw-update').addEventListener('click', fwGuard(fwUpdate));
 $('fw-file').addEventListener('change', () => ($<HTMLInputElement>('fw-file-radio').checked = true));
-void findLatest();
+if (!('usb' in navigator)) {
+  $('unsupported').hidden = false;
+  $<HTMLButtonElement>('fw-update').disabled = true;
+}
+void findRelease();
